@@ -1,0 +1,196 @@
+{
+  "config": {
+    "data": "data/pan_tadeusz_full.txt",
+    "tokenizer": "tokenizer_bpe.json",
+    "model": "tiny_gpt.json",
+    "report": "training_report.json",
+    "architecture": {
+      "context_size": 64,
+      "d_model": 128,
+      "d_ff": 512,
+      "n_heads": 4,
+      "n_layers": 2,
+      "dropout": 0.15,
+      "rms_epsilon": 1e-05,
+      "activation": "gelu",
+      "tie_embeddings": true
+    },
+    "training": {
+      "seed": 1,
+      "steps": 16000,
+      "batch_size": 32,
+      "learning_rate": 0.001,
+      "min_learning_rate": 0.0001,
+      "warmup_steps": 200,
+      "weight_decay": 0.1,
+      "beta1": 0.9,
+      "beta2": 0.99,
+      "adam_epsilon": 1e-08,
+      "gradient_clip": 1.0,
+      "evaluate_every": 1000,
+      "train_eval_windows": 1024,
+      "validation_fraction": 0.1,
+      "threads": 1
+    }
+  },
+  "torch_version": "2.8.0",
+  "data_sha256": "91962a707f26ddd178a391fbdc268075cf26101f206f8ef412d2dc9a9c3d11d3",
+  "tokenizer_sha256": "690bc5ddd4461a4fab83915b7d0fea33faaa2efd249f36282bb051ac113c5ca7",
+  "parameters": 467584,
+  "tokens": 258648,
+  "training_tokens": 232783,
+  "validation_tokens": 25865,
+  "initial": {
+    "train_loss_sample": 6.307402417063713,
+    "validation_loss": 6.308409419402952
+  },
+  "history": [
+    {
+      "step": 1,
+      "learning_rate": 5e-06,
+      "train_loss_sample": 6.303463563323021,
+      "validation_loss": 6.3044638198492375,
+      "saved": true,
+      "seconds": 31.503275875
+    },
+    {
+      "step": 1000,
+      "learning_rate": 0.00099431890387135,
+      "train_loss_sample": 3.2706162482500076,
+      "validation_loss": 3.392712818486326,
+      "saved": true,
+      "seconds": 123.588205167
+    },
+    {
+      "step": 2000,
+      "learning_rate": 0.0009714850742209276,
+      "train_loss_sample": 2.9673124104738235,
+      "validation_loss": 3.166009553601255,
+      "saved": true,
+      "seconds": 184.775463417
+    },
+    {
+      "step": 3000,
+      "learning_rate": 0.0009320425129411139,
+      "train_loss_sample": 2.7904263511300087,
+      "validation_loss": 3.0614317630936965,
+      "saved": true,
+      "seconds": 239.85973625
+    },
+    {
+      "step": 4000,
+      "learning_rate": 0.0008775454646662724,
+      "train_loss_sample": 2.683010056614876,
+      "validation_loss": 3.0142735662601154,
+      "saved": true,
+      "seconds": 297.529633417
+    },
+    {
+      "step": 5000,
+      "learning_rate": 0.0008101414001011818,
+      "train_loss_sample": 2.6054782196879387,
+      "validation_loss": 2.9822461835164753,
+      "saved": true,
+      "seconds": 357.428425375
+    },
+    {
+      "step": 6000,
+      "learning_rate": 0.0007324863943658472,
+      "train_loss_sample": 2.5475115552544594,
+      "validation_loss": 2.956664246702595,
+      "saved": true,
+      "seconds": 410.789424167
+    },
+    {
+      "step": 7000,
+      "learning_rate": 0.0006476404636478431,
+      "train_loss_sample": 2.4950854778289795,
+      "validation_loss": 2.9408166590672464,
+      "saved": true,
+      "seconds": 461.966640042
+    },
+    {
+      "step": 8000,
+      "learning_rate": 0.0005589469844492816,
+      "train_loss_sample": 2.4417213425040245,
+      "validation_loss": 2.9274034330093706,
+      "saved": true,
+      "seconds": 513.977418167
+    },
+    {
+      "step": 9000,
+      "learning_rate": 0.00046990094694510245,
+      "train_loss_sample": 2.40944305062294,
+      "validation_loss": 2.9160035609422756,
+      "saved": true,
+      "seconds": 563.43315225
+    },
+    {
+      "step": 10000,
+      "learning_rate": 0.0003840112339641965,
+      "train_loss_sample": 2.370576359331608,
+      "validation_loss": 2.9107826302751154,
+      "saved": true,
+      "seconds": 612.850162208
+    },
+    {
+      "step": 11000,
+      "learning_rate": 0.0003046623525267997,
+      "train_loss_sample": 2.3401406928896904,
+      "validation_loss": 2.9068627031379592,
+      "saved": true,
+      "seconds": 660.202770083
+    },
+    {
+      "step": 12000,
+      "learning_rate": 0.00023498106644375864,
+      "train_loss_sample": 2.3109317794442177,
+      "validation_loss": 2.899202909688054,
+      "saved": true,
+      "seconds": 704.415309708
+    },
+    {
+      "step": 13000,
+      "learning_rate": 0.00017771318535562432,
+      "train_loss_sample": 2.2893082574009895,
+      "validation_loss": 2.8975933080939127,
+      "saved": true,
+      "seconds": 750.576417208
+    },
+    {
+      "step": 14000,
+      "learning_rate": 0.00013511536537230706,
+      "train_loss_sample": 2.2705498412251472,
+      "validation_loss": 2.8926895590310115,
+      "saved": true,
+      "seconds": 795.921528792
+    },
+    {
+      "step": 15000,
+      "learning_rate": 0.00010886618493791376,
+      "train_loss_sample": 2.256632275879383,
+      "validation_loss": 2.8923387306706165,
+      "saved": true,
+      "seconds": 843.255479667
+    },
+    {
+      "step": 16000,
+      "learning_rate": 0.0001,
+      "train_loss_sample": 2.2474359273910522,
+      "validation_loss": 2.887286609006729,
+      "saved": true,
+      "seconds": 890.399187333
+    }
+  ],
+  "best_step": 16000,
+  "full_training_loss": 2.240633108498274,
+  "full_validation_loss": 2.887286609006729,
+  "elapsed_seconds": 997.075028792,
+  "model_sha256": "c9bbb6e32fed97a81a937a830c1132cffd35e6c531f348c02e93d1a975823101",
+  "report_note": "Ścieżki wejścia i wyjścia z uruchomienia pomiarowego zastąpiono ścieżkami docelowymi. Parametry, dane i zapisane wagi są identyczne.",
+  "source_sha256": {
+    "model.py": "f97f5532ccc538ad6e4acb8a78e8882bbc74e0dd235a9a4647bd1b2945520993",
+    "train_bpe.py": "3545d291dc9b0e080b24aa1267b70875c7c89a65fa60e36686464cd3a54d1d84",
+    "bpe_tokenizer.py": "81be70351fa7c037586e2097de7fe6a12563b98ca1a27097ff60127d38d52d5c"
+  }
+}

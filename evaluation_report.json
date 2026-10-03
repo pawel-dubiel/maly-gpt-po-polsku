@@ -1,0 +1,685 @@
+{
+  "metric": "mean next-token cross-entropy (nats), last position only",
+  "validation_tokens": 25865,
+  "target_offset_start": 128,
+  "evaluated_targets": 25737,
+  "data_sha256": "91962a707f26ddd178a391fbdc268075cf26101f206f8ef412d2dc9a9c3d11d3",
+  "tokenizer_sha256": "690bc5ddd4461a4fab83915b7d0fea33faaa2efd249f36282bb051ac113c5ca7",
+  "sampling": {
+    "temperature": 0.8,
+    "top_k": 40,
+    "max_new_tokens": 64,
+    "seeds": [
+      1,
+      7
+    ],
+    "prompts": [
+      "Tadeusz",
+      "Litwo! Ojczyzno moja!",
+      "Sędzia"
+    ]
+  },
+  "results": [
+    {
+      "name": "baseline64",
+      "checkpoint_sha256": "aa4e39c88b605adfd49232213831de4eabe6a2dc21939a23aa5726f1f946de20",
+      "context_size": 16,
+      "parameters": 99520,
+      "validation_next_token_loss": 3.061557246490288,
+      "perplexity": 21.360795298832905,
+      "samples": [
+        {
+          "prompt": "Tadeusz",
+          "seed": 1,
+          "text": "Tadeusz korona, uchmantową, z koloki i stryjaj na z kondur twoim tobą od małsz, nie był za korali na na",
+          "ended": false
+        },
+        {
+          "prompt": "Tadeusz",
+          "seed": 7,
+          "text": "Tadeusz w po ustawa o tym trudnie;\nJeształcony w tabaki palcem,\nDziewczynić postacią naciele, że na wyropić.\n",
+          "ended": false
+        },
+        {
+          "prompt": "Litwo! Ojczyzno moja!",
+          "seed": 1,
+          "text": "Litwo! Ojczyzno moja! bo w domu, że nie postanie będzie i a za nim potem po kochanków oboło,\nZ dachem ubranie; zaczęła swoich chwy",
+          "ended": false
+        },
+        {
+          "prompt": "Litwo! Ojczyzno moja!",
+          "seed": 7,
+          "text": "Litwo! Ojczyzno moja! jegry nie wypraw powiali,\nNiech psieni\nZ koncer się i z dwa kochanku.\nJako wytali na powraca; moc o",
+          "ended": false
+        },
+        {
+          "prompt": "Sędzia",
+          "seed": 1,
+          "text": "Sędzia się w tym szkodziców rozmowę,\nDostał niebo z tyłu i w kolej, za wojowskiej mocną, co mu za korajszej pa",
+          "ended": false
+        },
+        {
+          "prompt": "Sędzia",
+          "seed": 7,
+          "text": "Sędzia zapewne o dwa na nasze ułani.\nPodczas o tym trwała na kształt do powitać.\nNie pocieszyć, po szpady\nSpora",
+          "ended": false
+        }
+      ],
+      "label": "Poprzedni model 64D, 1 blok, kontekst 16",
+      "training_configuration": {
+        "epochs": 5,
+        "best_epoch": 4,
+        "seed": 1,
+        "learning_rate": 0.001,
+        "batch_size": 32,
+        "context_size": 16,
+        "validation_fraction": 0.1,
+        "threads": 1
+      },
+      "all_window_validation_loss": 3.1149566673836793,
+      "elapsed_seconds": 97.7
+    },
+    {
+      "name": "small64",
+      "checkpoint_sha256": "a1599ea98fccb87bd9a2b8992db7ac04c242a5c876b46a32ffac029d0ec89717",
+      "context_size": 64,
+      "parameters": 135488,
+      "validation_next_token_loss": 3.1742449006487004,
+      "perplexity": 23.908759561734904,
+      "samples": [
+        {
+          "prompt": "Tadeusz",
+          "seed": 1,
+          "text": "Tadeusz przóźnie,\nI plazem jak treb płu z koło pół w swoi obładza;\nZbyły, się jak dąpić się i i wy",
+          "ended": false
+        },
+        {
+          "prompt": "Tadeusz",
+          "seed": 7,
+          "text": "Tadeusz z ojskich w koniecko i głowę skrzygnął,\nZiersz z konie sku do płym uśmierko mędzie — — Poltego o",
+          "ended": false
+        },
+        {
+          "prompt": "Litwo! Ojczyzno moja!",
+          "seed": 1,
+          "text": "Litwo! Ojczyzno moja!\nGłowiek to w do dwóch niewo. Wszczar o ogrodu\nI o potropównie, jak kogo grzydnicznej ustawicznie,\nZaraz",
+          "ended": false
+        },
+        {
+          "prompt": "Litwo! Ojczyzno moja!",
+          "seed": 7,
+          "text": "Litwo! Ojczyzno moja!\nSłowny porwał się i w dwoje tłusz w prócz księży,\nI za pierwszy jak na naptastej z postawił,\nNa zapor",
+          "ended": false
+        },
+        {
+          "prompt": "Sędzia",
+          "seed": 1,
+          "text": "Sędzia swój na może ma — ostrawisz — wyprawny z domu okło się na gajowanie\nBocia książnie, i pochwał otro",
+          "ended": false
+        },
+        {
+          "prompt": "Sędzia",
+          "seed": 7,
+          "text": "Sędzia w ojskich z polewa:\n«Jakbyś ma woj — Rozburszał — nie do nie przerwały.\nAni poś za pani, ale ",
+          "ended": false
+        }
+      ],
+      "label": "Próba 64D, 2 bloki, kontekst 64",
+      "training_configuration": {
+        "name": "small64",
+        "dim": 64,
+        "ff": 256,
+        "heads": 4,
+        "layers": 2,
+        "context": 64,
+        "dropout": 0.1,
+        "lr": 0.001,
+        "weight_decay": 0.1,
+        "steps": 6000,
+        "warmup": 100,
+        "batch": 32,
+        "evaluate_every": 500,
+        "seed": 1
+      },
+      "best_step": 6000,
+      "all_window_validation_loss": 3.177771691171556,
+      "elapsed_seconds": 125.29792475
+    },
+    {
+      "name": "medium128",
+      "checkpoint_sha256": "e03cf77ef3ec72238de0a556ee88a460a5764e717ccc6929021f7500d953e1d6",
+      "context_size": 64,
+      "parameters": 467584,
+      "validation_next_token_loss": 2.944762705663481,
+      "perplexity": 19.006151799140234,
+      "samples": [
+        {
+          "prompt": "Tadeusz",
+          "seed": 1,
+          "text": "Tadeusz wywidział,\nJak gdyby z nim od oblicznych straszne powiadał,\nA z roku wnos w objęciła się jak bawił,\nRozparł",
+          "ended": false
+        },
+        {
+          "prompt": "Tadeusz",
+          "seed": 7,
+          "text": "Tadeusz z nim za sobą z radę.\nJa o sam wasze z drzewa się z porządku,\nI do tym tyłu go na polu pół szczęściach",
+          "ended": false
+        },
+        {
+          "prompt": "Litwo! Ojczyzno moja!",
+          "seed": 1,
+          "text": "Litwo! Ojczyzno moja! Hrecze policznie!\nBóg ja chwili zaszła i w domu oku!\nTeraz zerwie z Ksiądz to umi, i zwykł i do",
+          "ended": false
+        },
+        {
+          "prompt": "Litwo! Ojczyzno moja!",
+          "seed": 7,
+          "text": "Litwo! Ojczyzno moja! — krzyknął — na to zależy!\nGdy niedźwiedź, że mnie o to z wojna ust obie,\nPobiegł teraz od ustach pojętych ",
+          "ended": false
+        },
+        {
+          "prompt": "Sędzia",
+          "seed": 1,
+          "text": "Sędzia przypadła z drzewa,\nU ostatnia, że gdy na koniec na kształt ustąpury,\nNa drugiego na przeprowadził się na góry.",
+          "ended": false
+        },
+        {
+          "prompt": "Sędzia",
+          "seed": 7,
+          "text": "Sędzia — rzekł — na co to dawniej no doświadka,\nI przy pęk w koncu nie w pasie oczach godzić:\nTak odmówiłem zawsze",
+          "ended": false
+        }
+      ],
+      "label": "Próba 128D, 2 bloki, kontekst 64, 6000 kroków",
+      "training_configuration": {
+        "name": "medium128",
+        "dim": 128,
+        "ff": 512,
+        "heads": 4,
+        "layers": 2,
+        "context": 64,
+        "dropout": 0.15,
+        "lr": 0.001,
+        "weight_decay": 0.1,
+        "steps": 6000,
+        "warmup": 100,
+        "batch": 32,
+        "evaluate_every": 500,
+        "seed": 1
+      },
+      "best_step": 6000,
+      "all_window_validation_loss": 2.948841987213032,
+      "elapsed_seconds": 206.49604787500002
+    },
+    {
+      "name": "medium128_long",
+      "checkpoint_sha256": "91b30b4e758f0fd35752b06bcd2df9892d7b4e7e8200cca4c49fae8714125139",
+      "context_size": 64,
+      "parameters": 467584,
+      "validation_next_token_loss": 2.866423840724158,
+      "perplexity": 17.574058058449904,
+      "samples": [
+        {
+          "prompt": "Tadeusz",
+          "seed": 1,
+          "text": "Tadeusz mówił na drzewa — Klucznik Kiryło wymowny — Niedźwiedź w swoich sąsiadów,\nPrzyjaciele o marszu i po za sob",
+          "ended": false
+        },
+        {
+          "prompt": "Tadeusz",
+          "seed": 7,
+          "text": "Tadeusz z nim i na nim z karczmie\nRosyją się z robim, po krzeskim wyrzucił.\n\n    «To Tadeuszu, że po powstaniu nowiu\n",
+          "ended": false
+        },
+        {
+          "prompt": "Litwo! Ojczyzno moja!",
+          "seed": 1,
+          "text": "Litwo! Ojczyzno moja! cóż o tym?\nNiech dziś do tej sprawy! Wszakże o tym wielu?»\n\n                        «A panie zmienił, grzech —\n«A ja ",
+          "ended": false
+        },
+        {
+          "prompt": "Litwo! Ojczyzno moja!",
+          "seed": 7,
+          "text": "Litwo! Ojczyzno moja! — krzyknął — woła!\nZresztą Hrabia, żeby mu z dawnego wychowa\nI tam nie mógł, że się umierzał z polakać\nOdezwały",
+          "ended": false
+        },
+        {
+          "prompt": "Sędzia",
+          "seed": 1,
+          "text": "Sędzia wzniesioną wyciągnął,\nMiał że pod nim drzwi i krwią w ręku stół drogą,\nOczynił ręką objąwszy rękę, a głowę",
+          "ended": false
+        },
+        {
+          "prompt": "Sędzia",
+          "seed": 7,
+          "text": "Sędzia z nim na dłonił i w dnia pałki\nI z głową w palcem na parkarki —\nTuż a to był poznać to wys",
+          "ended": false
+        }
+      ],
+      "label": "Próba 128D, 2 bloki, kontekst 64, 16000 kroków",
+      "training_configuration": {
+        "name": "medium128_long",
+        "dim": 128,
+        "ff": 512,
+        "heads": 4,
+        "layers": 2,
+        "context": 64,
+        "dropout": 0.15,
+        "lr": 0.001,
+        "weight_decay": 0.1,
+        "steps": 16000,
+        "warmup": 200,
+        "batch": 32,
+        "evaluate_every": 1000,
+        "seed": 1
+      },
+      "best_step": 16000,
+      "all_window_validation_loss": 2.8937172393485384,
+      "elapsed_seconds": 544.285894416
+    },
+    {
+      "name": "deep128",
+      "checkpoint_sha256": "4e4029c72f19fc9f22468b164cf714acc5439b55e30389b1002eeeceffba5f2a",
+      "context_size": 64,
+      "parameters": 861312,
+      "validation_next_token_loss": 2.863526281417655,
+      "perplexity": 17.523209886342908,
+      "samples": [
+        {
+          "prompt": "Tadeusz",
+          "seed": 1,
+          "text": "Tadeusz widać, że już nie porywa zdrać:\n«Móż to jest mój z moim tyle zalotów nie bierzy,\nBo o was z moim przyjmo",
+          "ended": false
+        },
+        {
+          "prompt": "Tadeusz",
+          "seed": 7,
+          "text": "Tadeusz w pośrodku po okolicy,\nTyle ze źwierza i pole i po owym grodu,\nPatrzyłem nieraz poszli wyraz w las domu ",
+          "ended": false
+        },
+        {
+          "prompt": "Litwo! Ojczyzno moja!",
+          "seed": 1,
+          "text": "Litwo! Ojczyzno moja! Bo nie może?\nNiechaj wiem! Zdziwiłem, że nie zaszkodzi na dziedzi\nNa kotastu mazura kontusza! Nie wie, czy na Sopli",
+          "ended": false
+        },
+        {
+          "prompt": "Litwo! Ojczyzno moja!",
+          "seed": 7,
+          "text": "Litwo! Ojczyzno moja! Jeśli po was ojczyzny?\nWie waszeci stąd to dawniej zabija dostać,\nNie przypuścił masz rady! Ja z zgodą w",
+          "ended": false
+        },
+        {
+          "prompt": "Sędzia",
+          "seed": 1,
+          "text": "Sędzia mówił — nie mógł Hrabia — poznać o tem!\nA co? cóż to za szkodzić! Ja żyję».\n\n    Kto wiedział głos z uśmiechem,",
+          "ended": false
+        },
+        {
+          "prompt": "Sędzia",
+          "seed": 7,
+          "text": "Sędzia z nim na końcu zaściankiem,\nŻe po obu, co był z pana włoskiej kobiety.\nRozpada wracać, że mnie jesteś u",
+          "ended": false
+        }
+      ],
+      "label": "Próba 128D, 4 bloki, kontekst 64, 12000 kroków",
+      "training_configuration": {
+        "name": "deep128",
+        "dim": 128,
+        "ff": 512,
+        "heads": 4,
+        "layers": 4,
+        "context": 64,
+        "dropout": 0.15,
+        "lr": 0.0007,
+        "weight_decay": 0.1,
+        "steps": 12000,
+        "warmup": 200,
+        "batch": 32,
+        "evaluate_every": 1000,
+        "seed": 1
+      },
+      "best_step": 12000,
+      "all_window_validation_loss": 2.8930763913967743,
+      "elapsed_seconds": 752.805116208
+    },
+    {
+      "name": "product64",
+      "checkpoint_sha256": "c9bbb6e32fed97a81a937a830c1132cffd35e6c531f348c02e93d1a975823101",
+      "context_size": 64,
+      "parameters": 467584,
+      "validation_next_token_loss": 2.855932528967901,
+      "perplexity": 17.390646930496757,
+      "samples": [
+        {
+          "prompt": "Tadeusz",
+          "seed": 1,
+          "text": "Tadeusz Podkomorzy do krwawą.\nJako tu sługi z lasem zaraz i po rachu,\nKtóre studniał jako liściach śród b szczwacze,\n",
+          "ended": false
+        },
+        {
+          "prompt": "Tadeusz",
+          "seed": 7,
+          "text": "Tadeusz — rzekł — w gnieniu wzrok kolana».\n\n    Potem w Litwie na Litwie na to zboże,\nZdobywając w owym krzepstwie nie",
+          "ended": false
+        },
+        {
+          "prompt": "Litwo! Ojczyzno moja!",
+          "seed": 1,
+          "text": "Litwo! Ojczyzno moja! Pan Bóg na parkowie!\nAch nie masz mości na niebie zgody odmiennie!»\n«I zwycięzców — wołał Hrabia — od ka",
+          "ended": false
+        },
+        {
+          "prompt": "Litwo! Ojczyzno moja!",
+          "seed": 7,
+          "text": "Litwo! Ojczyzno moja! — krzyknął — powtórzył!\nA jutro, za nim nie wiem, że się rozumie?\nMusicie! Powiem! a to to był dawniej ",
+          "ended": false
+        },
+        {
+          "prompt": "Sędzia",
+          "seed": 1,
+          "text": "Sędzia był z wolna pola swojej zaprowadzić.\n\n    I na koniec rzekł Podkomorzy Sędziego godzi,\nDaremnie roztrwogą po poważnym swo",
+          "ended": false
+        },
+        {
+          "prompt": "Sędzia",
+          "seed": 7,
+          "text": "Sędzia z powstanie i z Rosyjań — Podkomorzy — Polskę u nas — Czy na to strzał w moim szlachecki i przepada uka ",
+          "ended": false
+        }
+      ],
+      "label": "Kod docelowy: 128D, 2 bloki, kontekst 64, 16000 kroków",
+      "architecture": {
+        "context_size": 64,
+        "d_model": 128,
+        "d_ff": 512,
+        "n_heads": 4,
+        "n_layers": 2,
+        "dropout": 0.15,
+        "rms_epsilon": 1e-05,
+        "activation": "gelu",
+        "tie_embeddings": true
+      },
+      "training_configuration": {
+        "seed": 1,
+        "steps": 16000,
+        "batch_size": 32,
+        "learning_rate": 0.001,
+        "min_learning_rate": 0.0001,
+        "warmup_steps": 200,
+        "weight_decay": 0.1,
+        "beta1": 0.9,
+        "beta2": 0.99,
+        "adam_epsilon": 1e-08,
+        "gradient_clip": 1.0,
+        "evaluate_every": 1000,
+        "train_eval_windows": 1024,
+        "validation_fraction": 0.1,
+        "threads": 1
+      },
+      "best_step": 16000,
+      "all_window_validation_loss": 2.887286609006729,
+      "elapsed_seconds": 997.075028792
+    },
+    {
+      "name": "product128",
+      "checkpoint_sha256": "2970559c496cfa0948bbd853f7faaa82b21c5d9829a24a3a55b733e995da5a29",
+      "context_size": 128,
+      "parameters": 475776,
+      "validation_next_token_loss": 2.909179560773258,
+      "perplexity": 18.341744105875826,
+      "samples": [
+        {
+          "prompt": "Tadeusz",
+          "seed": 1,
+          "text": "Tadeusz tak się pokojnie — rzekł — próżny na słowa z góry,\nA tak zasądnie szpady ujrzystwo z obejmie,\nA w tył ",
+          "ended": false
+        },
+        {
+          "prompt": "Tadeusz",
+          "seed": 7,
+          "text": "Tadeusz i z domu z pokoju\nI taką nareszcie, a zbyt domu na pokoju.\nPrawda, że chcela nie wiem, postawie o ",
+          "ended": false
+        },
+        {
+          "prompt": "Litwo! Ojczyzno moja!",
+          "seed": 1,
+          "text": "Litwo! Ojczyzno moja!\nCo się w górę Ryków! Mówiosną dowiedzić,\nA tak w kurtka usłyszeli na wielkich,\nŻe już oto zwał się domu",
+          "ended": false
+        },
+        {
+          "prompt": "Litwo! Ojczyzno moja!",
+          "seed": 7,
+          "text": "Litwo! Ojczyzno moja!\nW tym z Soplicowie za lat patenta prędzej,\nI z nami poleonem polskim się nie gadanie».\n\n    «Mówiłem! — rzekł R",
+          "ended": false
+        },
+        {
+          "prompt": "Sędzia",
+          "seed": 1,
+          "text": "Sędzia jakby poznał\nI od nich wytrwogą zamek za klasztoru,\nA ojca panów, mopanku, ja tu kto na siedzi?\nBę",
+          "ended": false
+        },
+        {
+          "prompt": "Sędzia",
+          "seed": 7,
+          "text": "Sędzia w okno na niebie wyrazy.\nChoćby mnie z dawnych ust i pokoju okradał!\nAch ten wsi ojczyzny, wtenczas po",
+          "ended": false
+        }
+      ],
+      "label": "Kod docelowy: 128D, 2 bloki, kontekst 128, 12000 kroków",
+      "architecture": {
+        "context_size": 128,
+        "d_model": 128,
+        "d_ff": 512,
+        "n_heads": 4,
+        "n_layers": 2,
+        "dropout": 0.15,
+        "rms_epsilon": 1e-05,
+        "activation": "gelu",
+        "tie_embeddings": true
+      },
+      "training_configuration": {
+        "seed": 1,
+        "steps": 12000,
+        "batch_size": 32,
+        "learning_rate": 0.001,
+        "min_learning_rate": 0.0001,
+        "warmup_steps": 200,
+        "weight_decay": 0.1,
+        "beta1": 0.9,
+        "beta2": 0.99,
+        "adam_epsilon": 1e-08,
+        "gradient_clip": 1.0,
+        "evaluate_every": 1000,
+        "train_eval_windows": 1024,
+        "validation_fraction": 0.1,
+        "threads": 1
+      },
+      "best_step": 11000,
+      "all_window_validation_loss": 2.934757648678043,
+      "elapsed_seconds": 1581.467154583
+    }
+  ],
+  "selected": "product64",
+  "selection_reason": "Najniższa zmierzona strata na tych samych tokenach walidacji; dwa bloki zamiast czterech ograniczają liczbę parametrów i koszt obliczeń.",
+  "limitations": [
+    "Jedna książka, jeden seed treningu; wynik nie dowodzi globalnie optymalnych ustawień.",
+    "Tokenizer był uczony na całej książce. Fragment walidacyjny nie aktualizuje wag transformera, ale jest używany do wyboru ustawień i checkpointu; brak niezależnego zbioru testowego.",
+    "Próby wstępne używały równoważnego modelu z funkcjami PyTorch i próbką 2048 okien walidacji do wyboru checkpointu. Kod docelowy wybiera checkpoint po ocenie wszystkich okien. Końcowy wspólny pomiar dla każdego wariantu obejmuje dokładnie te same 25737 celów.",
+    "Czasy obejmują różny zakres oceny; część uruchomień odbywała się równolegle. Nie są izolowanym benchmarkiem szybkości."
+  ],
+  "sampling_comparison": {
+    "model_sha256": "c9bbb6e32fed97a81a937a830c1132cffd35e6c531f348c02e93d1a975823101",
+    "samples": [
+      {
+        "temperature": 0.6,
+        "top_k": 40,
+        "seed": 1,
+        "max_new_tokens": 64,
+        "prompt": "Tadeusz",
+        "text": "Tadeusz nie uśmiechnął:\n«Nigdy chcąc!» — wołając Sędzia — nie wiem, że potrzeba:\n«Bracie — rzekł Hrabia — co się w zamku ",
+        "ended": false
+      },
+      {
+        "temperature": 0.6,
+        "top_k": 40,
+        "seed": 7,
+        "max_new_tokens": 64,
+        "prompt": "Tadeusz",
+        "text": "Tadeusz z powoli na owym głowy,\nŻe na całym ogród prędko i na pole,\nDla na nowe świecie do ziemi kwiatów swe",
+        "ended": false
+      },
+      {
+        "temperature": 0.6,
+        "top_k": 40,
+        "seed": 1,
+        "max_new_tokens": 64,
+        "prompt": "Litwo! Ojczyzno moja!",
+        "text": "Litwo! Ojczyzno moja! Cóż to waszeć —\nMój Kuchcik za nim z komendę — posłał za stołem,\nNa niewolnie chcę z wolna nie",
+        "ended": false
+      },
+      {
+        "temperature": 0.6,
+        "top_k": 40,
+        "seed": 7,
+        "max_new_tokens": 64,
+        "prompt": "Litwo! Ojczyzno moja!",
+        "text": "Litwo! Ojczyzno moja! — krzyknął — po co?\nU nas wiem, że nie mogę poczciwo z pana\nZ dala z konia, że z ptastwem zapomniał",
+        "ended": false
+      },
+      {
+        "temperature": 0.6,
+        "top_k": 40,
+        "seed": 1,
+        "max_new_tokens": 64,
+        "prompt": "Sędzia",
+        "text": "Sędzia przejmie na pół drzwi pośrodku,\nWalczmy i kształt z boku izba się wysłania:\n«Ja po tym o tym moim ",
+        "ended": false
+      },
+      {
+        "temperature": 0.6,
+        "top_k": 40,
+        "seed": 7,
+        "max_new_tokens": 64,
+        "prompt": "Sędzia",
+        "text": "Sędzia z południa i z Rejentem\nZ wycięzców i całym w pole na niebie ust gniewa;\nAż się z nim w obrony ",
+        "ended": false
+      },
+      {
+        "temperature": 0.8,
+        "top_k": 40,
+        "seed": 1,
+        "max_new_tokens": 64,
+        "prompt": "Tadeusz",
+        "text": "Tadeusz Podkomorzy do krwawą.\nJako tu sługi z lasem zaraz i po rachu,\nKtóre studniał jako liściach śród b szczwacze,\n",
+        "ended": false
+      },
+      {
+        "temperature": 0.8,
+        "top_k": 40,
+        "seed": 7,
+        "max_new_tokens": 64,
+        "prompt": "Tadeusz",
+        "text": "Tadeusz — rzekł — w gnieniu wzrok kolana».\n\n    Potem w Litwie na Litwie na to zboże,\nZdobywając w owym krzepstwie nie",
+        "ended": false
+      },
+      {
+        "temperature": 0.8,
+        "top_k": 40,
+        "seed": 1,
+        "max_new_tokens": 64,
+        "prompt": "Litwo! Ojczyzno moja!",
+        "text": "Litwo! Ojczyzno moja! Pan Bóg na parkowie!\nAch nie masz mości na niebie zgody odmiennie!»\n«I zwycięzców — wołał Hrabia — od ka",
+        "ended": false
+      },
+      {
+        "temperature": 0.8,
+        "top_k": 40,
+        "seed": 7,
+        "max_new_tokens": 64,
+        "prompt": "Litwo! Ojczyzno moja!",
+        "text": "Litwo! Ojczyzno moja! — krzyknął — powtórzył!\nA jutro, za nim nie wiem, że się rozumie?\nMusicie! Powiem! a to to był dawniej ",
+        "ended": false
+      },
+      {
+        "temperature": 0.8,
+        "top_k": 40,
+        "seed": 1,
+        "max_new_tokens": 64,
+        "prompt": "Sędzia",
+        "text": "Sędzia był z wolna pola swojej zaprowadzić.\n\n    I na koniec rzekł Podkomorzy Sędziego godzi,\nDaremnie roztrwogą po poważnym swo",
+        "ended": false
+      },
+      {
+        "temperature": 0.8,
+        "top_k": 40,
+        "seed": 7,
+        "max_new_tokens": 64,
+        "prompt": "Sędzia",
+        "text": "Sędzia z powstanie i z Rosyjań — Podkomorzy — Polskę u nas — Czy na to strzał w moim szlachecki i przepada uka ",
+        "ended": false
+      },
+      {
+        "temperature": 1.0,
+        "top_k": 40,
+        "seed": 1,
+        "max_new_tokens": 64,
+        "prompt": "Tadeusz",
+        "text": "Tadeusz spuścił ozwał się — Zapomałem — Strzelcy — Napoleon po swym — No, czyli tak nie dają chwalić się damy",
+        "ended": false
+      },
+      {
+        "temperature": 1.0,
+        "top_k": 40,
+        "seed": 7,
+        "max_new_tokens": 64,
+        "prompt": "Tadeusz",
+        "text": "Tadeusz — rzekł Sędzia — jak to ja pokół —\nI po co? wszakże to w konie jest historitera kanda,\nDziwnie tak chło",
+        "ended": false
+      },
+      {
+        "temperature": 1.0,
+        "top_k": 40,
+        "seed": 1,
+        "max_new_tokens": 64,
+        "prompt": "Litwo! Ojczyzno moja!",
+        "text": "Litwo! Ojczyzno moja! ja ja się chcę?\nCo nieszczęśny? A, że to wam o tym nie zapławi —\nGerwazego! Biesiadaj nie oddaj Soplica",
+        "ended": false
+      },
+      {
+        "temperature": 1.0,
+        "top_k": 40,
+        "seed": 7,
+        "max_new_tokens": 64,
+        "prompt": "Litwo! Ojczyzno moja!",
+        "text": "Litwo! Ojczyzno moja! W tej tej nocy,\nWszyscy zajęcia napartym i zabiegł swoim,\nWest swej sąsiadów grzbie. Dąbrowski obławę.\nNaresz",
+        "ended": false
+      },
+      {
+        "temperature": 1.0,
+        "top_k": 40,
+        "seed": 1,
+        "max_new_tokens": 64,
+        "prompt": "Sędzia",
+        "text": "Sędzia się na dwóch zwroku wyklech:\n«Szeroko — rzekł — jak mój szlachcic!» — «Tak, prawda,\nJa mnie nie za mnie u",
+        "ended": false
+      },
+      {
+        "temperature": 1.0,
+        "top_k": 40,
+        "seed": 7,
+        "max_new_tokens": 64,
+        "prompt": "Sędzia",
+        "text": "Sędzia — rzekł — powtórzył Sędzia — milczała wzrok prowadzi,\nOjczyzny, co się działo ogłaszać: podobna,\nMiędzy nim u",
+        "ended": false
+      }
+    ]
+  },
+  "recommended_sampling": {
+    "temperature": 0.6,
+    "top_k": 40,
+    "seed": 1,
+    "max_new_tokens": 64,
+    "threads": 1
+  }
+}

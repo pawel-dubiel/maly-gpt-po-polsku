@@ -1,0 +1,34 @@
+{
+  "data": "data/pan_tadeusz_full.txt",
+  "tokenizer": "tokenizer_bpe.json",
+  "model": "tiny_gpt.json",
+  "report": "training_report.json",
+  "architecture": {
+    "context_size": 64,
+    "d_model": 128,
+    "d_ff": 512,
+    "n_heads": 4,
+    "n_layers": 2,
+    "dropout": 0.15,
+    "rms_epsilon": 1e-05,
+    "activation": "gelu",
+    "tie_embeddings": true
+  },
+  "training": {
+    "seed": 1,
+    "steps": 16000,
+    "batch_size": 32,
+    "learning_rate": 0.001,
+    "min_learning_rate": 0.0001,
+    "warmup_steps": 200,
+    "weight_decay": 0.1,
+    "beta1": 0.9,
+    "beta2": 0.99,
+    "adam_epsilon": 1e-08,
+    "gradient_clip": 1.0,
+    "evaluate_every": 1000,
+    "train_eval_windows": 1024,
+    "validation_fraction": 0.1,
+    "threads": 1
+  }
+}
