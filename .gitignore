@@ -3,3 +3,7 @@ __pycache__/
 .venv/
 tiny_gpt.json
 tiny_gpt_chat.json
+*.safetensors
+data/wolnelektury/
+data/polska_proza_full.txt
+data/polska_proza_full.manifest.json

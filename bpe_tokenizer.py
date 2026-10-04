@@ -48,14 +48,16 @@ class BPETokenizer:
             raise ValueError(f"Vocabulary size must be at least {len(vocabulary)} to include all characters and <end>.")
         piece_ids = {piece: i for i, piece in enumerate(vocabulary)}
         frequencies = Counter(SEGMENTS.findall(text))
-        splits = [([piece_ids[char] for char in segment], frequency)
-                  for segment, frequency in frequencies.items()]
+        words = [[piece_ids[char] for char in segment] for segment in frequencies]
+        counts = list(frequencies.values())
+        pairs = Counter()
+        pair_words = {}
+        for idx, (ids, freq) in enumerate(zip(words, counts)):
+            for pair in zip(ids, ids[1:]):
+                pairs[pair] += freq
+                pair_words.setdefault(pair, set()).add(idx)
         merges = []
         while len(vocabulary) < vocabulary_size:
-            pairs = Counter()
-            for ids, frequency in splits:
-                for pair in zip(ids, ids[1:]):
-                    pairs[pair] += frequency
             if not pairs:
                 raise ValueError(f"Cannot reach vocabulary size {vocabulary_size}; no adjacent pairs remain.")
             # Ties choose the lowest IDs, so the same text gives the same tokenizer.
@@ -66,8 +68,21 @@ class BPETokenizer:
                 vocabulary.append(piece)
             result = piece_ids[piece]
             merges.append([left, right, result])
-            splits = [(merge_pair(ids, left, right, result), frequency) for ids, frequency in splits]
-            if len(merges) % 50 == 0:
+            for idx in pair_words.pop((left, right), ()):
+                ids = words[idx]
+                if not any(a == left and b == right for a, b in zip(ids, ids[1:])):
+                    continue
+                freq = counts[idx]
+                for old_pair in zip(ids, ids[1:]):
+                    pairs[old_pair] -= freq
+                    if pairs[old_pair] <= 0:
+                        pairs.pop(old_pair, None)
+                new_ids = merge_pair(ids, left, right, result)
+                words[idx] = new_ids
+                for new_pair in zip(new_ids, new_ids[1:]):
+                    pairs[new_pair] += freq
+                    pair_words.setdefault(new_pair, set()).add(idx)
+            if len(merges) % 200 == 0:
                 print(f"BPE merge {len(merges)}: {vocabulary[left]!r} + {vocabulary[right]!r} -> {piece!r}; vocabulary={len(vocabulary)}", flush=True)
         return cls.from_dict({"type": TOKENIZER_TYPE, "alphabet": alphabet,
                               "vocabulary": vocabulary, "merges": merges})

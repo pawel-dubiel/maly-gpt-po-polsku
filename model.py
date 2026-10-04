@@ -4,14 +4,16 @@ import json
 import math
 import os
 from pathlib import Path
+import struct
 import tempfile
 
 try:
+    import numpy as np
     import torch
     from torch import nn
     from torch.nn import functional as F
 except ModuleNotFoundError as error:
-    raise SystemExit("Brak PyTorch. Zainstaluj requirements-full.txt w .venv.") from error
+    raise SystemExit("Brak PyTorch/NumPy. Zainstaluj requirements-full.txt w .venv.") from error
 
 from bpe_tokenizer import BPETokenizer
 
@@ -245,8 +247,110 @@ def new_model(tokenizer, architecture, seed):
     return GPT(tokenizer, a, weights)
 
 
+def load_safetensors(path):
+    raw = Path(path).read_bytes()
+    if len(raw) < 8:
+        raise ValueError("Plik safetensors jest za krótki (brak 8-bajtowego nagłówka).")
+    (header_len,) = struct.unpack("<Q", raw[:8])
+    if header_len < 2 or header_len > len(raw) - 8 or header_len > 100_000_000:
+        raise ValueError("Nieprawidłowa długość nagłówka w pliku safetensors.")
+    try:
+        header = json.loads(raw[8:8 + header_len].decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ValueError("Uszkodzony nagłówek JSON w pliku safetensors.") from error
+    if not isinstance(header, dict) or "__metadata__" not in header:
+        raise ValueError("Brak sekcji __metadata__ w pliku safetensors.")
+    meta = header["__metadata__"]
+    meta_fields = {"format", "architecture", "tokenizer", "vocabulary"}
+    if not isinstance(meta, dict) or set(meta) != meta_fields or any(not isinstance(v, str) for v in meta.values()):
+        raise ValueError("Niepełne lub nieobsługiwane pola __metadata__ w safetensors.")
+    if meta["format"] != MODEL_FORMAT:
+        raise ValueError(f"Wymagany format {MODEL_FORMAT}; starszy model wymaga nowego treningu.")
+    try:
+        architecture = json.loads(meta["architecture"])
+        tokenizer_dict = json.loads(meta["tokenizer"])
+        vocabulary = json.loads(meta["vocabulary"])
+    except json.JSONDecodeError as error:
+        raise ValueError("Uszkodzone metadane JSON wewnątrz safetensors.") from error
+    tokenizer = BPETokenizer.from_dict(tokenizer_dict)
+    if vocabulary != list(tokenizer.vocabulary):
+        raise ValueError("Słownik modelu musi dokładnie odpowiadać tokenizerowi.")
+    data_buf = memoryview(raw)[8 + header_len:]
+    weights = {}
+    for name, info in header.items():
+        if name == "__metadata__":
+            continue
+        if not isinstance(info, dict) or set(info) != {"dtype", "shape", "data_offsets"}:
+            raise ValueError(f"Nieprawidłowy wpis tensora {name} w nagłówku safetensors.")
+        if info["dtype"] != "F32":
+            raise ValueError(f"Tensor {name} wymaga dtype='F32'.")
+        shape = info["shape"]
+        offsets = info["data_offsets"]
+        if (not isinstance(shape, list) or len(shape) != 2
+                or any(type(d) is not int or d < 1 for d in shape)):
+            raise ValueError(f"Nieprawidłowy kształt tensora {name} w safetensors.")
+        if (not isinstance(offsets, list) or len(offsets) != 2
+                or any(type(o) is not int for o in offsets)):
+            raise ValueError(f"Nieprawidłowe offsety tensora {name} w safetensors.")
+        start, end = offsets
+        expected_bytes = shape[0] * shape[1] * 4
+        if start < 0 or end > len(data_buf) or end - start != expected_bytes:
+            raise ValueError(f"Uszkodzony bufor danych tensora {name} w safetensors.")
+        arr = np.frombuffer(data_buf, dtype="<f4", count=shape[0] * shape[1], offset=start).reshape(shape).copy()
+        weights[name] = torch.from_numpy(arr)
+    return GPT(tokenizer, architecture, weights)
+
+
+def save_safetensors(path, model):
+    path = Path(path)
+    if not path.parent.is_dir() or path.is_dir():
+        raise ValueError(f"Checkpoint wymaga pliku w istniejącym katalogu: {path}")
+    GPT(model.tokenizer, model.architecture, dict(model.weights))
+    metadata = {
+        "format": MODEL_FORMAT,
+        "architecture": json.dumps(dict(model.architecture), ensure_ascii=False, separators=(",", ":"), allow_nan=False),
+        "tokenizer": json.dumps(model.tokenizer.to_dict(), ensure_ascii=False, separators=(",", ":"), allow_nan=False),
+        "vocabulary": json.dumps(list(model.tokenizer.vocabulary), ensure_ascii=False, separators=(",", ":"), allow_nan=False),
+    }
+    header = {"__metadata__": metadata}
+    buffers = []
+    offset = 0
+    for name, matrix in model.weights.items():
+        arr = matrix.detach().to(dtype=torch.float32, device="cpu").contiguous().numpy().astype("<f4", copy=False)
+        raw_bytes = arr.tobytes()
+        end = offset + len(raw_bytes)
+        header[name] = {
+            "dtype": "F32",
+            "shape": list(matrix.shape),
+            "data_offsets": [offset, end],
+        }
+        buffers.append(raw_bytes)
+        offset = end
+    header_bytes = json.dumps(header, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode("utf-8")
+    pad = (8 - (len(header_bytes) % 8)) % 8
+    if pad:
+        header_bytes += b" " * pad
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="wb", dir=path.parent, delete=False) as handle:
+            temporary = Path(handle.name)
+            handle.write(struct.pack("<Q", len(header_bytes)))
+            handle.write(header_bytes)
+            for buf in buffers:
+                handle.write(buf)
+            handle.flush()
+            os.fsync(handle.fileno())
+        temporary.replace(path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
 def load_model(path):
-    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    path = Path(path)
+    if path.suffix == ".safetensors":
+        return load_safetensors(path)
+    payload = json.loads(path.read_text(encoding="utf-8"))
     fields = {"format", "architecture", "tokenizer", "vocabulary", "weights"}
     if not isinstance(payload, dict) or set(payload) != fields:
         raise ValueError("Niepełne lub nieobsługiwane pola checkpointu.")
@@ -260,6 +364,8 @@ def load_model(path):
 
 def save_model(path, model):
     path = Path(path)
+    if path.suffix == ".safetensors":
+        return save_safetensors(path, model)
     if not path.parent.is_dir() or path.is_dir():
         raise ValueError(f"Checkpoint wymaga pliku w istniejącym katalogu: {path}")
     # Szybka walidacja tensorów przed zapisem chroni ostatni poprawny checkpoint.

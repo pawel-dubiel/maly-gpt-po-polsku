@@ -125,8 +125,8 @@ def learning_rate(step, settings):
         1 + math.cos(math.pi * progress)) / 2
 
 
-def select_training_device(context_size):
-    if context_size >= 128:
+def select_training_device(model):
+    if model.context_size >= 128 or model.d_model >= 192:
         if torch.cuda.is_available():
             return torch.device("cuda")
         if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
@@ -135,7 +135,7 @@ def select_training_device(context_size):
 
 
 def train(model, inputs, targets, validation_inputs, validation_targets, settings, model_path):
-    device = select_training_device(model.context_size)
+    device = select_training_device(model)
     model.to(device)
     # Normy i embeddingi nie podlegają weight decay; grupujemy po nazwie, nie po ndim.
     no_decay_names = ("norm_", "embedding")
@@ -151,11 +151,15 @@ def train(model, inputs, targets, validation_inputs, validation_targets, setting
     count = min(len(inputs), settings["train_eval_windows"])
     chosen = torch.linspace(0, len(inputs) - 1, steps=count).long()
     eval_x, eval_y = inputs[chosen], targets[chosen]
-    stride = max(1, model.context_size // 2)
-    val_x, val_y = validation_inputs[::stride], validation_targets[::stride]
-    full_train_x, full_train_y = inputs[::stride], targets[::stride]
+    large_vocab = len(model.tokenizer.vocabulary) >= 2048
+    max_val_windows = 512 if large_vocab else 2048
+    max_train_windows = 1024 if large_vocab else 4096
+    val_stride = max(1, model.context_size // 2, len(validation_inputs) // max_val_windows)
+    train_stride = max(1, model.context_size // 2, len(inputs) // max_train_windows)
+    val_x, val_y = validation_inputs[::val_stride], validation_targets[::val_stride]
+    full_train_x, full_train_y = inputs[::train_stride], targets[::train_stride]
     batch = settings["batch_size"]
-    eval_batch = max(batch, 128 if model.context_size >= 128 else 256)
+    eval_batch = max(batch, 32 if large_vocab else (128 if model.context_size >= 128 else 256))
     history = []
     started = time.perf_counter()
     initial = {"train_loss_sample": mean_loss(model, eval_x, eval_y, eval_batch),

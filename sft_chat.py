@@ -13,7 +13,7 @@ from torch.nn import functional as F
 
 IGNORE_INDEX = -100
 
-# Zbiór par instrukcyjnych (Q&A oraz polecenia poetyckie) dla etapu SFT.
+# Zbiór par instrukcyjnych (Q&A oraz polecenia literackie) dla etapu SFT.
 SFT_PAIRS = [
     ("Kto napisał Pana Tadeusza?", "Autorem epopei narodowej «Pan Tadeusz» jest Adam Mickiewicz."),
     ("Kim jest Jacek Soplica?", "Jacek Soplica to ojciec Tadeusza, który jako Ksiądz Robak przygotowuje powstanie na Litwie."),
@@ -27,6 +27,11 @@ SFT_PAIRS = [
     ("Napisz dwuwiersz o Soplicowie.", "Słońce weszło nad borem i złociło łany,\nA w Soplicowie budził się dwór pobielany."),
     ("Co robi Ksiądz Robak?", "Ksiądz Robak to emisariusz, który potajemnie przygotowuje szlachtę litewską do powstania."),
     ("Jak kończy się Pan Tadeusz?", "Poemat kończy się zgodą rodów, zaręczynami Tadeusza z Zosią oraz uroczystym polonezem."),
+    ("Kim jest Stanisław Wokulski?", "Stanisław Wokulski to główny bohater powieści «Lalka» Bolesława Prusa, warszawski kupiec zakochany w Izabeli Łęckiej."),
+    ("Kto napisał Lalkę?", "Powieść «Lalka» napisał Bolesław Prus."),
+    ("Kim jest profesor Rafał Wilczur?", "Profesor Rafał Wilczur to słynny chirurg z powieści «Znachor» Tadeusza Dołęgi-Mostowicza, który po utracie pamięci leczy ludzi jako Antoni Kosiba."),
+    ("Kim jest Nikodem Dyzma?", "Nikodem Dyzma to bohater powieści Tadeusza Dołęgi-Mostowicza, który dzięki przypadkowi i tupetowi robi błyskawiczną karierę w Warszawie."),
+    ("Kim jest Cezary Baryka?", "Cezary Baryka to główny bohater powieści «Przedwiośnie» Stefana Żeromskiego, powracający z rewolucyjnego Baku do odrodzonej Polski."),
 ]
 
 
@@ -64,12 +69,14 @@ def train_sft(model_path, output_path, steps=150, lr=5e-4, seed=1, threads=8):
     torch.set_num_threads(threads)
     torch.manual_seed(seed)
     model = load_model(model_path)
+    device = torch.device("cuda" if torch.cuda.is_available() else ("mps" if hasattr(torch.backends, "mps") and torch.backends.mps.is_available() else "cpu"))
+    model.to(device)
     max_pair_tokens = max(
         len(model.tokenizer.encode(format_prompt(q), strict=False)) + len(model.tokenizer.encode(a, strict=False))
         for q, a in SFT_PAIRS
     )
     sft_seq_len = min(model.context_size, max_pair_tokens)
-    inputs, targets = build_sft_batch(model.tokenizer, SFT_PAIRS, sft_seq_len)
+    inputs, targets = build_sft_batch(model.tokenizer, SFT_PAIRS, sft_seq_len, device=device)
     no_decay_names = ("norm_", "embedding")
     decay = [p for name, p in model.weights.items() if not any(k in name for k in no_decay_names)]
     no_decay = [p for name, p in model.weights.items() if any(k in name for k in no_decay_names)]
@@ -106,11 +113,13 @@ def train_sft(model_path, output_path, steps=150, lr=5e-4, seed=1, threads=8):
             targets.reshape(-1),
             ignore_index=IGNORE_INDEX,
         ).item()
+    model.to("cpu")
     save_model(output_path, model)
     return {
         "initial_sft_loss": init_loss,
         "final_sft_loss": final_loss,
         "steps": steps,
+        "device": device.type,
         "elapsed_seconds": time.perf_counter() - started,
         "output": str(output_path),
     }
@@ -130,18 +139,19 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     train_cmd = commands.add_parser("train", help="Doucz model bazowy na parach Pytanie -> Odpowiedź (SFT).")
-    train_cmd.add_argument("--model", required=True)
-    train_cmd.add_argument("--output", required=True)
+    train_cmd.add_argument("--model", default="tiny_gpt.safetensors")
+    train_cmd.add_argument("--output", default="tiny_gpt_chat.safetensors")
     train_cmd.add_argument("--steps", type=positive_integer, default=150)
     train_cmd.add_argument("--lr", type=positive_float, default=5e-4)
     train_cmd.add_argument("--seed", type=int, default=1)
     train_cmd.add_argument("--threads", type=positive_integer, default=8)
 
     ask_cmd = commands.add_parser("ask", help="Zadaj pytanie modelowi po SFT.")
-    ask_cmd.add_argument("--model", required=True)
+    ask_cmd.add_argument("--model", default="tiny_gpt_chat.safetensors")
+    ask_cmd.add_argument("--tokenizer", default=None, help="Opcjonalny (tokenizator jest wbudowany w checkpoint).")
     ask_cmd.add_argument("--question", required=True)
     ask_cmd.add_argument("--seed", type=int, default=1)
-    ask_cmd.add_argument("--max-new-tokens", type=positive_integer, default=96)
+    ask_cmd.add_argument("--max-new-tokens", "--length", dest="max_new_tokens", type=positive_integer, default=96)
     ask_cmd.add_argument("--temperature", type=positive_float, default=0.3)
     ask_cmd.add_argument("--top-k", type=positive_integer, default=20)
     ask_cmd.add_argument("--top-p", type=positive_float, default=0.9)

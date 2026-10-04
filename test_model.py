@@ -159,6 +159,22 @@ class ModelTests(unittest.TestCase):
                 save_model(path, self.model)
             self.assertEqual(path.read_bytes(), saved)
 
+    def test_safetensors_checkpoint_round_trip_and_validation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "model.safetensors"
+            save_model(path, self.model)
+            saved = path.read_bytes()
+            loaded = load_model(path)
+            self.assertEqual((loaded.d_model, loaded.d_ff, loaded.context_size), (64, 128, 3))
+            self.assertTrue(torch.equal(self.model(torch.tensor([[2, 3]])), loaded(torch.tensor([[2, 3]]))))
+            self.assertEqual(loaded.tokenizer.to_dict(), self.tokenizer.to_dict())
+            path.write_bytes(saved[:4])
+            with self.assertRaises(ValueError):
+                load_model(path)
+            path.write_bytes(saved[:-4])
+            with self.assertRaises(ValueError):
+                load_model(path)
+
     def test_invalid_inputs_and_dimensions_fail_explicitly(self):
         for ids in (torch.tensor([[-1]]), torch.tensor([[4]]), torch.tensor([[1.0]]),
                     torch.tensor([[True]]), torch.empty((0, 1), dtype=torch.long),

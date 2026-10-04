@@ -65,15 +65,16 @@ def generate(model, prompt, seed, max_new_tokens, temperature, top_k, top_p=1.0,
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--model", required=True)
+    parser.add_argument("--model", default="tiny_gpt.safetensors")
+    parser.add_argument("--tokenizer", default=None, help="Opcjonalny (tokenizator jest wbudowany w checkpoint).")
     parser.add_argument("--prompt", required=True)
-    parser.add_argument("--seed", type=int, required=True)
-    parser.add_argument("--max-new-tokens", type=positive_integer, required=True)
-    parser.add_argument("--threads", type=positive_integer, required=True)
-    parser.add_argument("--temperature", type=positive_float, required=True)
-    parser.add_argument("--top-k", type=positive_integer, required=True)
-    parser.add_argument("--top-p", type=positive_float, default=1.0)
-    parser.add_argument("--repetition-penalty", type=positive_float, default=1.0)
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--max-new-tokens", "--length", dest="max_new_tokens", type=positive_integer, default=80)
+    parser.add_argument("--threads", type=positive_integer, default=8)
+    parser.add_argument("--temperature", type=positive_float, default=0.7)
+    parser.add_argument("--top-k", type=positive_integer, default=20)
+    parser.add_argument("--top-p", type=positive_float, default=0.9)
+    parser.add_argument("--repetition-penalty", type=positive_float, default=1.15)
     parser.add_argument("--device", default="cpu", choices=("cpu", "mps", "cuda"))
     args = parser.parse_args()
     try:
@@ -94,9 +95,15 @@ def main():
             for head, row in enumerate(maps[0, :, -1].tolist(), start=1):
                 print(f"  Block {layer}, head {head}: " + ", ".join(
                     f"{words[token]!r}: {probability:.6f}" for token, probability in zip(ids, row)))
-        print("\nNext-token probabilities:")
-        for token, probability in zip(words, probabilities):
-            print(f"  {token!r:>10}: {probability:.6f}")
+        if len(words) > 512:
+            print("\nNext-token probabilities (top 30):")
+            top_indices = sorted(range(len(words)), key=lambda i: probabilities[i], reverse=True)[:30]
+            for i in top_indices:
+                print(f"  {words[i]!r:>14}: {probabilities[i]:.6f}")
+        else:
+            print("\nNext-token probabilities:")
+            for token, probability in zip(words, probabilities):
+                print(f"  {token!r:>10}: {probability:.6f}")
         best = max(range(len(words)), key=lambda token: probabilities[token])
         print(f"\nMost likely next token: {words[best]!r}")
         text, ended = generate(
