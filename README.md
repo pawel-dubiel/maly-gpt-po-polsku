@@ -1,20 +1,21 @@
-# Mały GPT po polsku
+# Mały GPT po polsku (Wersja 0.4)
 
-Edukacyjny transformer GPT uczony od zera na „Panu Tadeuszu”. Projekt obejmuje
-tokenizację BPE, attention Q/K/V, trening z walidacją, zapis najlepszego modelu
-i generowanie tekstu. README i objaśnienia kodu są po polsku.
+Edukacyjny, ale wyposażony we współczesne mechanizmy LLM transformer uczony od zera
+na „Panu Tadeuszu”. Projekt obejmuje:
+- **Tokenizację BPE** ze spacją jako prefiksem słowa (wzorzec GPT-2/LLaMA), szybkim słownikiem rang i obsługą dowolnych znaków UTF-8 (*byte/Unicode fallback*),
+- **Nowoczesną architekturę Transformera (LLaMA 3 / Qwen / Mistral) z oknem `256` tokenów:** kodowanie pozycji względnych **RoPE** (0 uczonych wag pozycyjnych), grupowaną uwagę **GQA (*Grouped-Query Attention*)**, bramkowaną sieć **SwiGLU**, **RMSNorm** oraz współdzielenie wag wejścia/wyjścia (*weight tying*),
+- **Silnik inferencji i treningu z akceleracją GPU (`mps` / `cuda`):** **KV-Cache**, próbkowanie **Top-p (*Nucleus Sampling*)**, **Top-k**, **Repetition Penalty** oraz automatyczny trening na Apple Silicon (`mps`) lub CUDA przy dłuższym kontekście,
+- **Etap SFT (*Supervised Fine-Tuning*)** z maskowaniem straty na pytaniu użytkownika i trybem rozmowy Q&A ([`sft_chat.py`](sft_chat.py)).
 
-To model do nauki budowy LLM. Potrafi naśladować słownictwo i wersy książki,
-ale nadal popełnia błędy językowe i nie prowadzi rozmowy jak ChatGPT.
-Konfigurację dobrano przez rzeczywiste treningi i pomiar walidacji.
-
+Szczegółowa historia zmian (`Bazowa` → `v0.1` → `v0.2` → `v0.3` → `v0.4`) znajduje się w [changes/README.md](changes/README.md).
 Praktyczny przewodnik: [dobór parametrów, przeuczenie i porównywanie treningów](#jak-dobierać-parametry-i-optymalizować-trening).
+
+---
 
 ## Uruchomienie
 
 Polecenia wykonuj w katalogu repozytorium. Każde jest jedną linią — możesz
-wkleić je bez znaków kontynuacji `\`. Wymagany jest Python i CPU; przykład
-sprawdzono z Pythonem 3.9 i PyTorch 2.8 na macOS.
+wkleić je bez znaków kontynuacji `\`. Przykład sprawdzono z Pythonem 3.9 i PyTorch 2.8 na macOS (CPU oraz Apple Silicon `mps`).
 
 ### 1. Środowisko
 
@@ -23,121 +24,115 @@ python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements-full.txt
 ```
 
-### 2. Trening
+### 2. Trening modelu bazowego (*Pre-training*, okno 256 tokenów)
 
-Książka i gotowy tokenizer są już w repozytorium. Wszystkie ustawienia zawiera
+Książka i wyuczony tokenizer są już w repozytorium. Wszystkie ustawienia zawiera
 [train_config.json](train_config.json). Uruchom:
 
 ```sh
 .venv/bin/python train_bpe.py --config train_config.json
 ```
 
-Powstaną dwa pliki:
+Dla `context_size >= 128` skrypt automatycznie wykrywa kartę graficzną Apple Silicon (`mps`) lub NVIDIA (`cuda`), dzięki czemu trening **8 000 kroków** po **16 okien × 256 tokenów** (`32,77 mln` tokenów łącznie) trwa **~4 minuty**. Powstaną dwa pliki:
 
-- `tiny_gpt.json` — najlepsze wagi, architektura i tokenizer; wystarcza do predykcji.
-- `training_report.json` — ustawienia, hashe danych i modelu, przebieg walidacji,
-  wybrany krok, końcowe wyniki i czas treningu.
+- `tiny_gpt.json` (`~9,16 MB`) — najlepsze wagi, architektura i tokenizer; wystarcza do predykcji oraz dalszego douczania SFT.
+- `training_report.json` — ustawienia, hashe danych i modelu, przebieg walidacji, wybrany krok, końcowe wyniki i czas treningu.
 
-Skrypt zaczyna od nowych wag. Nie musisz usuwać starego modelu: nowy zapis
-atomowo zastępuje plik wskazany w konfiguracji. Uruchomienie nie wznawia
-poprzedniego treningu. Wagi pozostają lokalne i są pomijane przez Git.
-Raport powstaje po zakończeniu treningu; jego `model_sha256` identyfikuje model,
-którego wyniki opisuje.
+Skrypt zaczyna od nowych wag i atomowo zastępuje plik wskazany w konfiguracji.
+Wagi pozostają lokalne i są pomijane przez Git (`.gitignore`).
 
-Ścieżki z konfiguracji są liczone względem katalogu **pliku konfiguracji**.
-Każde pole jest wymagane; brak ustawienia, błędna wartość, brak pliku lub
-niezgodny format kończą się jawnym błędem. Model i raport nie mogą wskazywać
-pliku książki, tokenizera ani konfiguracji.
-
-### 3. Predykcja
+### 3. Predykcja i generowanie tekstu (z KV-Cache, Top-p i Repetition Penalty)
 
 ```sh
-.venv/bin/python predict_gpt.py --model tiny_gpt.json --prompt 'Tadeusz' --seed 1 --max-new-tokens 64 --threads 1 --temperature 0.6 --top-k 40 | tail -n 3
+.venv/bin/python predict_gpt.py --model tiny_gpt.json --prompt 'Litwo! Ojczyzno moja!' --seed 1 --max-new-tokens 120 --threads 8 --temperature 0.7 --top-k 20 --top-p 0.9 --repetition-penalty 1.15 | tail -n 10
 ```
 
 - `Most likely next token` — najbardziej prawdopodobny token przed ograniczeniem losowania.
 - `Generated` — prompt i wylosowana kontynuacja; `\n` oznacza nową linię.
-- `Stopped` — zakończenie przez limit albo token `<end>`.
+- `Stopped` — zakończenie przez limit `--max-new-tokens` albo wygenerowanie tokenu `<end>`.
 
-`temperature=0.6` zaostrza rozkład prawdopodobieństw, a `top-k=40` ogranicza
-losowanie do 40 najbardziej prawdopodobnych tokenów na każdym kroku.
-`--top-k 1` zawsze wybiera najbardziej prawdopodobny token. Pełny rozkład
-uzyskasz przez `--temperature 1 --top-k 512`. Te ustawienia zmieniają losowanie,
-a nie wyuczone wagi ani wynik walidacji. Wszystkie argumenty są wymagane.
+Dostępne parametry próbkowania i urządzenia:
+- `--temperature` — zaostrza (`< 1.0`) lub spłaszcza (`> 1.0`) rozkład prawdopodobieństw.
+- `--top-k` — ogranicza losowanie do $K$ najbardziej prawdopodobnych tokenów (`--top-k 1` wybiera zachłannie najlepszy token).
+- `--top-p` (domyślnie `1.0`, zalecane `0.9`) — *Nucleus Sampling*: dynamicznie odcina ogon rozkładu powyżej skumulowanego prawdopodobieństwa $p$.
+- `--repetition-penalty` (domyślnie `1.0`, zalecane `1.15`) — kara za powtarzanie tokenów obecnych w oknie kontekstu.
+- `--device` (`cpu`, `mps`, `cuda`, domyślnie `cpu`) — wybór urządzenia obliczeniowego.
 
-Prompt może mieć do **64 tokenów BPE**. Dalsze generowanie przesuwa okno
-kontekstu. Predykcja korzysta wyłącznie z checkpointu — nie potrzebuje książki
-ani osobnego tokenizera. Dropout jest wtedy wyłączony; ten sam seed i ustawienia
-odtwarzają wynik w tym samym środowisku.
+Generowanie korzysta z **KV-Cache (`forward_cached`)**: cały prompt przechodzi przez sieć tylko raz (*prefill*), a w kolejnych krokach przeliczany jest wyłącznie **1 ostatnio wygenerowany token** aż do wypełnienia 256-tokenowego okna. Usuń `| tail -n 10`, aby zobaczyć ID tokenów, macierze attention z każdej głowy i bloku oraz prawdopodobieństwa wszystkich 512 tokenów. Znak spoza książki w prompcie nie powoduje błędu dzięki automatycznemu fallbackowi UTF-8/Unicode.
 
-Usuń `| tail -n 3`, aby zobaczyć ID tokenów, attention z każdej głowy i bloku
-oraz prawdopodobieństwa wszystkich 512 tokenów. Nieznany znak w prompcie
-powoduje błąd; nowe słowo jest dozwolone, jeśli znamy wszystkie jego znaki.
+### 4. Douczanie instrukcyjne (SFT) i tryb rozmowy Q&A
 
-Jeśli terminal pokazuje `dquote>`, cudzysłów nie został zamknięty.
-Naciśnij Ctrl+C i wklej całe polecenie z prostymi apostrofami `'`.
+Model bazowy (`tiny_gpt.json`) uczy się kontynuować poemat. Aby przekształcić go w model odpowiadający na pytania i wykonujący polecenia poetyckie, uruchom etap **Supervised Fine-Tuning (SFT)** ([`sft_chat.py`](sft_chat.py)):
 
-**Starszy `tiny_gpt_bpe64.json` używa formatu v1.** Obecny kod wymaga v2 i nowego
-treningu. Zmieniła się architektura, więc nie wystarczy zmienić nazwy starego
-pliku. Docelowy model nazywa się `tiny_gpt.json`.
+```sh
+.venv/bin/python sft_chat.py train --model tiny_gpt.json --output tiny_gpt_chat.json --steps 150
+```
 
-## Wybrany model
+Skrypt doucza model w ~4 sekundy na parach `Pytanie: ...\nOdpowiedź: ...<end>`, nakładając **maskę straty (`ignore_index = -100`)** na tokeny pytania użytkownika (gradienty aktualizują wagi wyłącznie na odpowiedzi asystenta i końcowym znaczniku `<end>`).
+
+Zadawanie pytań wyuczonemu modelowi konwersacyjnemu:
+
+```sh
+.venv/bin/python sft_chat.py ask --model tiny_gpt_chat.json --question "Jak zaczyna się inwokacja?"
+.venv/bin/python sft_chat.py ask --model tiny_gpt_chat.json --question "Kim jest Jacek Soplica?"
+.venv/bin/python sft_chat.py ask --model tiny_gpt_chat.json --question "Napisz dwuwiersz o Soplicowie."
+```
+
+Przykładowy wynik (pełne 4 wersy mieszczące się swobodnie w 256-tokenowym oknie):
+```text
+Pytanie: Jak zaczyna się inwokacja?
+Odpowiedź: Litwo! Ojczyzno moja! ty jesteś jak zdrowie;
+Ile cię trzeba cenić, ten tylko się dowie,
+Kto cię stracił. Dziś piękność twą w całej ozdobie
+Widzę i opisuję, bo tęsknię po tobie.
+Stopped: <end>
+```
+
+---
+
+## Wybrany model (Wersja 0.4)
 
 | Element | Wartość |
 |---|---:|
 | Słownik BPE | 512 tokenów |
-| Wektor tokenu | 128 liczb |
-| Kontekst | 64 tokenów |
-| Bloki transformera | 2 |
-| Głowy attention w każdym bloku | 4 |
-| Rozmiar jednej głowy | 32 liczby |
-| Wq, Wk, Wv, Wo w każdym bloku | 128 × 128 |
-| Feed-forward | 128 → 512 → 128 |
-| Dropout w treningu | 0,15 |
-| Liczba parametrów | 467 584 |
+| Wektor tokenu (`d_model`) | 128 liczb |
+| Kontekst (`context_size`) | **256 tokenów (~12–16 wersów poematu)** |
+| Kodowanie pozycji | **Czyste RoPE** (*Rotary Position Embeddings*, 0 uczonych wag) |
+| Bloki transformera (`n_layers`) | 2 |
+| Głowy zapytań `Q` (`n_heads`) | 4 (po 32 liczby) |
+| Głowy kluczy i wartości `K/V` (`n_kv_heads`, GQA) | 2 (po 32 liczby, współdzielone przez 4 głowy `Q`) |
+| Projekcje uwagi w bloku | `Wq`, `Wo`: 128 × 128; `Wk`, `Wv`: 128 × 64 |
+| Sieć Feed-Forward (**SwiGLU**) | `W_gate`: 128 × 384, `W1`: 128 × 384, `W2`: 384 × 128 |
+| Dropout w treningu | 0,15 (w tym *attention dropout*) |
+| Liczba parametrów | **459 392** |
 
-Każdy z 512 wpisów słownika ma jeden uczony wektor 128D. Liczba wystąpień
-słowa w książce nie tworzy nowych embeddingów. W kontekście wektory są
-przekształcane przez uwagę i feed-forward, dlatego reprezentacja tego samego
-tokenu zależy od poprzedzającego tekstu.
-
-[model.py](model.py) pokazuje operacje bez ukrywania attention w gotowym bloku:
+[model.py](model.py) implementuje zarówno szybką ścieżkę treningową/ewaluacyjną opartą na natywnym kernelu C++ `F.scaled_dot_product_attention`, ścieżkę z buforem `forward_cached` (KV-Cache), jak i jawną ścieżkę `forward_with_attention` zwracającą macierze uwagi:
 
 ```text
-ID → embedding tokenu + embedding pozycji → dropout
+ID → embedding tokenu → dropout
 
 Powtórz dla każdego z dwóch bloków:
   X = RMSNorm(wektory)
-  Q = X Wq, K = X Wk, V = X Wv
-  podział Q, K, V na 4 głowy po 32 liczby
-  A = softmax(Q Kᵀ / √32 + maska przyszłości)
-  połączenie głów A V → Wo → dropout → dodanie wejścia bloku
-  RMSNorm → W1 → GELU → W2 → dropout → dodanie wejścia tej części
+  Q = X Wq (4 głowy × 32),  K = X Wk (2 głowy × 32),  V = X Wv (2 głowy × 32)
+  Q, K = RoPE(Q, K)         # obrót wektorów kodujący względną odległość (i - j) na 256 pozycjach
+  powielenie 2 głów K, V do 4 głów Q (Grouped-Query Attention)
+  A = softmax(Q Kᵀ / √32 + maska przyszłości) → attention dropout
+  połączenie głów A V → Wo → dropout → dodanie wejścia bloku (residual)
+  Z = RMSNorm(wektory)
+  SwiGLU(Z) = (SiLU(Z W_gate) ⊙ (Z W1)) W2 → dropout → dodanie wejścia (residual)
 
-końcowy RMSNorm → mnożenie przez transponowaną macierz embeddingów
+końcowy RMSNorm → mnożenie przez transponowaną macierz embeddingów (weight tying)
 → 512 logitów → softmax → prawdopodobieństwa następnego tokenu
 ```
 
-Maska zabrania patrzenia na przyszłe tokeny. Połączenia przez dodawanie to
-*residual connections*. Wyjście współdzieli wagi z embeddingami wejściowymi
-(*weight tying*). Dropout losowo zeruje część aktywacji podczas treningu,
-a RMSNorm normalizuje ich skalę. Wszystkie macierze i współczynniki RMSNorm
-uczą się przez gradienty.
-
-Wagi zaczynają od rozkładu normalnego o odchyleniu 0,02. W projekcjach wyjściowych
-attention i feed-forward odchylenie jest dodatkowo dzielone przez
-`√(2 × liczba_bloków)`. Współczynniki RMSNorm zaczynają od 1.
+---
 
 ## Dane i tokeny
 
 Korpus zawiera wszystkie dwanaście ksiąg i epilog „Pana Tadeusza” Adama
-Mickiewicza: **445 638 znaków** i **258 648 tokenów BPE**. Pochodzi z Wolnych
-Lektur; [źródło i prawa do tekstu](data/SOURCE.md) opisano osobno.
+Mickiewicza: **445 638 znaków** i **218 228 tokenów BPE** (wraz z końcowym znacznikiem `<end>`). Pochodzi z Wolnych Lektur; [źródło i prawa do tekstu](data/SOURCE.md) opisano osobno.
 
-BPE zaczyna od znaków i łączy częste sąsiednie pary. Token może być fragmentem
-słowa, całym słowem, spacją albo interpunkcją. Łączenia nie przekraczają granic
-między ciągami liter/cyfr, białych znaków i interpunkcji. Dekodowanie odtwarza
-tekst wraz ze spacjami, znakami polskimi i nowymi liniami.
+Pre-tokenizacja BPE (`SEGMENTS = re.compile(r" ?\w+| ?[^\w\s]+|\s+", re.UNICODE)`) dołącza spację poprzedzającą słowo jako prefiks segmentu. Dzięki temu częste słowa i przedrostki łączą się ze spacją w jeden token (np. `' mo'`, `' nie'`, `' się'`), co zmniejszyło udział osobnych tokenów białych znaków z **26,7%** do **5,5%** i skróciło cały strumień o ponad 40 tys. tokenów. Kodowanie wykorzystuje tablicę rang `self.ranks`, przetwarzając całą książkę w **0,21 s**.
 
 Podgląd:
 
@@ -146,350 +141,96 @@ Podgląd:
 ```
 
 ```text
-Pieces: ['Li', 't', 'wo', '!', ' ', 'O', 'j', 'czy', 'zno', ' ', 'mo', 'ja', '!']
-IDs: [483, 59, 136, 3, 2, 31, 49, 140, 489, 2, 154, 160, 3]
+Pieces: ['L', 'i', 't', 'wo', '!', ' ', 'O', 'j', 'czy', 'z', 'no', ' mo', 'ja', '!']
+IDs: [28, 48, 59, 164, 3, 2, 31, 49, 146, 65, 173, 229, 259, 3]
+Decoded: 'Litwo! Ojczyzno moja!'
 ```
 
-Tokenizer jest zapisany w repo. Jeśli chcesz odtworzyć jego uczenie:
+Odtworzenie treningu tokenizera:
 
 ```sh
 .venv/bin/python bpe_tokenizer.py train --data data/pan_tadeusz_full.txt --output tokenizer_bpe.json --vocab-size 512
 ```
 
-Pierwsze **232 783 tokeny** służą do treningu; ostatnie **25 865** do walidacji.
-Dzielimy strumień **przed** tworzeniem okien. Żadne okno treningowe nie sięga
-do walidacji. Tokenizer wyuczono na całej książce i pozostawiono stały:
-walidacja dotyczy wag transformera; nie jest niezależnym testem doboru
-tokenizera ani osobnym zbiorem testowym.
+Pierwsze **196 405 tokenów** (`196 149` okien po 256 tokenów) służy do treningu; ostatnie **21 823 tokeny** (`21 567` okien po 256 tokenów) do walidacji. Strumień dzielimy **przed** tworzeniem okien, więc żadne okno treningowe nie sięga do walidacji.
+
+---
 
 ## Co dzieje się podczas treningu
 
-Wejścia i cele są przesunięte o jeden token:
+- W każdym z **8 000 kroków** losowanych jest **16 okien po 256 tokenów** (`4 096` tokenów na krok, łącznie `32 768 000` tokenów).
+- `AdamW` aktualizuje wagi z `weight_decay = 0,1` wyłącznie dla macierzy projekcji (`Wq, Wk, Wv, Wo, W_gate, W1, W2`), natomiast współczynniki `RMSNorm` oraz `token_embedding` mają **`weight_decay = 0,0`** (zapobiega to zanikaniu rzadkich tokenów i sztucznemu rozrostowi skali `norm_final`).
+- Learning rate rośnie liniowo przez 200 kroków do `0,001`, a następnie maleje kosinusowo do `0,0001`.
+- Po kroku 1 i co 500 kroków skrypt mierzy `train_loss_sample` (1024 okna) oraz `validation_loss` (okna walidacyjne ze skokiem `stride = context_size // 2 = 128`). Checkpoint `tiny_gpt.json` jest nadpisywany wyłącznie wtedy, gdy `validation_loss` osiąga nowe minimum.
 
-```text
-wejście: ['Li', 't',  'wo', '!']
-cel:     ['t',  'wo', '!',  ' ']
-```
+---
 
-W rzeczywistym batchu są 32 losowane okna po 64 tokenów. Każda pozycja
-ma własny cel. Cross-entropy mierzy średnią stratę tych przewidywań, a PyTorch
-oblicza gradienty wszystkich wag. Globalna norma gradientów jest ograniczana
-do 1. AdamW aktualizuje wagi; weight decay wynosi 0,1 dla macierzy i 0 dla
-współczynników RMSNorm. Parametry AdamW, w tym bety i epsilon, są jawne
-w konfiguracji.
+## Porównanie kolejnych wersji projektu
 
-Trening trwa **16 000 kroków**. Okna są losowane z powtórzeniami, więc krok nie
-jest epoką ani przejściem przez całą książkę. Learning rate przez pierwsze
-200 kroków rośnie do 0,001, następnie maleje kosinusowo do 0,0001.
+Szczegółowy opis każdej wersji znajduje się w katalogu [`changes/`](changes/README.md):
 
-Po kroku 1, co 1000 kroków oraz na końcu skrypt ocenia:
+| Wersja | Architektura i kluczowe zmiany | Okno kontekstu | Parametry | Czas treningu (`T=32,8M`) | `full_validation_loss` |
+|---|---|---:|---:|---:|---:|
+| **Bazowa** | Absolutne `position_embedding`, MHA, `GELU`, spacje osobno (26,7%), `weight_decay` na embeddingach | 64 | 467 584 | 997,1 s (~16,6 min, CPU) | 2,8873 *(stary słownik ze spacjami)* |
+| **[Wersja 0.1](changes/v0.1.md)** | Spacje jako prefiks BPE (5,5%), `self.ranks` (23× szybciej), brak `weight_decay` na embeddingach, Attention Dropout, hybrydowe RoPE | 64 | 467 584 | 629,0 s (~10,5 min, CPU) | 3,4272 *(nowy słownik)* |
+| **[Wersja 0.2](changes/v0.2.md)** | **Czyste RoPE** (usunięcie `position_embedding`), natywne `SDPA`, walidacja ze skokiem `stride`, kompaktowy JSON (`9,16 MB`) | 64 | **459 392** | 470,5 s (~7,8 min, CPU) | **3,4187** *(nowy słownik)* |
+| **[Wersja 0.3](changes/v0.3.md)** | **SwiGLU (`d_ff=384`) + GQA (`4Q/2KV`)**, **KV-Cache**, **Top-p + Repetition Penalty**, **UTF-8 Fallback**, **SFT Chat (`sft_chat.py`)** | 64 | **459 392** | 496,2 s (~8,3 min, CPU) | 3,4375 *(nowy słownik)* |
+| **[Wersja 0.4](changes/v0.4.md)** | **4× dłuższe okno (`context_size = 256`)**, automatyczny trening na **GPU Apple Silicon (`mps`) / `cuda`**, pełna 4-wersowa Inwokacja w SFT | **256** | **459 392** | **246,2 s (~4,1 min, MPS)** | **3,4196** *(przy oknie 256 tok.)* |
 
-- `train_loss_sample` — stałą próbkę 1024 równomiernie rozmieszczonych okien
-  treningowych; dla krótszego tekstu używa wszystkich dostępnych okien.
-- `validation_loss` — **wszystkie** okna odłożonej części książki.
+*(Uwaga: w nowym słowniku BPE ze strumienia zniknęło ponad 40 tys. pojedynczych tokenów spacji `" "`, które były niemal deterministyczne po każdym słowie i w wersji bazowej sztucznie zaniżały średni loss na token).*
 
-Walidacja działa bez gradientów i dropout. Checkpoint jest zastępowany tylko
-przy ściśle niższej stracie walidacyjnej; remis zachowuje wcześniejszy model.
-Po treningu skrypt wczytuje wybrany checkpoint i mierzy loss na wszystkich
-oknach treningowych i walidacyjnych. Wyniki końcowe w raporcie dotyczą tego
-pliku, a nie ostatniego modelu w pamięci. Ocena całego zbioru może chwilę potrwać.
-
-`<end>` jest zarezerwowany w słowniku, ale nie dopisujemy go jako sztucznego celu
-po każdym oknie książki. Głównym ograniczeniem długości generowania jest
-`--max-new-tokens`.
-
-## Zmierzone wyniki
-
-W repo pozostaje jedna konfiguracja. Tabela dokumentuje próby, które posłużyły
-do jej wyboru.
-
-Wspólny pomiar ocenia **25 737 tych samych docelowych tokenów** z końcowych
-10% książki. Pomija pierwsze 128 tokenów tej części; każdy model dostaje swoje
-maksymalne okno poprzedzające cel (16, 64 albo 128 tokenów). Liczymy cross-entropy
-tylko dla ostatniej pozycji okna. Mniej oznacza lepsze przewidywanie.
-
-| Sprawdzony wariant | Loss na tych samych celach |
-|---|---:|
-| Poprzedni model 64D, 1 blok, kontekst 16 | 3.062 |
-| Próba 64D, 2 bloki, kontekst 64 | 3.174 |
-| Próba 128D, 2 bloki, kontekst 64, 6000 kroków | 2.945 |
-| Próba 128D, 2 bloki, kontekst 64, 16000 kroków | 2.866 |
-| Próba 128D, 4 bloki, kontekst 64, 12000 kroków | 2.864 |
-| Kod docelowy: 128D, 2 bloki, kontekst 64, 16000 kroków | 2.856 |
-| Kod docelowy: 128D, 2 bloki, kontekst 128, 12000 kroków | 2.909 |
-
-Wybrany model ma loss **2.856 zamiast 3.062**.
-Odpowiada to obniżeniu perplexity o około **18.6%**. Wagi pochodzą z
-kroku **16000**; cały docelowy trening wraz z oceną trwał na tym
-komputerze około **16.6 minuty**. Czasy zależą od sprzętu;
-część eksperymentów wykonywano równolegle.
-
-Raport treningu podaje też loss uśredniony po **wszystkich pozycjach wszystkich
-okien**: trening **2.241**, walidacja **2.887**.
-To inny sposób uśredniania niż w tabeli, dlatego liczby są różne.
-Przy porównywaniu modeli używaj tej samej metody pomiaru.
-
-Pełne wyniki, hashe checkpointów i wszystkie próbki z trzech stałych promptów
-i seedów 1 oraz 7 znajdują się w [evaluation_report.json](evaluation_report.json).
-Zapisano również porównanie temperatur 0,6 / 0,8 / 1,0. Przykładowy początek
-wyniku z polecenia powyżej (temperatura 0,6, seed 1):
-
-```text
-Tadeusz nie uśmiechnął:
-«Nigdy chcąc!» — wołając Sędzia — nie wiem, że potrzeba:
-```
-
-**Poprawa lossu nie oznacza poprawnego polskiego.** Próbka nadal ma błędy
-składniowe. Model naśladuje słownictwo książki, ale nie utrzymuje niezawodnie
-sensu ani gramatyki. Jedna książka, mały model i jeden seed treningu ograniczają
-wnioski. Są to najlepsze ustawienia w tym porównaniu, nie dowód globalnego optimum.
-Walidacja służyła także do wyboru modelu, więc nie jest osobnym testem końcowym.
-
+---
 
 ## Jak dobierać parametry i optymalizować trening
 
-**Nie ma przelicznika „jedna książka = model o określonej wielkości”.** Szukamy
-ustawień, które przy dostępnym czasie poprawiają przewidywanie odłożonego tekstu.
-Więcej parametrów albo więcej kroków może pomóc, ale wynik trzeba zmierzyć.
-Poniższa procedura dotyczy uczenia naszego modelu od zera.
-
-Wagi, np. liczby w `Wq`, są **parametrami uczonymi**. Rozmiar wektora,
-liczba bloków i learning rate to **hiperparametry**: ustawiasz je przed treningiem.
-Konfiguracja zawiera jawne ustawienia wybranego eksperymentu; nie są to
-wartości zastępcze dla dowolnego tekstu.
-
 ### 1. Policz dane, powtórzenia i rozmiar modelu osobno
 
-| Wielkość | Co oznacza w tym repo |
-|---|---|
-| `V = 512` | Liczba różnych tokenów w słowniku, a więc liczba wierszy embeddingów. |
-| `U = 232 783` | Liczba pozycji tokenów w części treningowej książki, przed powtarzaniem okien. To nie liczba różnych słów ani różnych ID. |
-| `P = 467 584` | Liczba wszystkich uczonych liczb w modelu. |
-| `T = 32 768 000` | Łączna liczba celów tokenowych przetworzonych w aktualizacjach wag. |
+| Wielkość | Wartość w obecnej konfiguracji | Co oznacza |
+|---|---:|---|
+| `V` | `512` | Liczba różnych tokenów w słowniku BPE. |
+| `U` | `196 405` | Liczba pozycji tokenów w części treningowej książki. |
+| `P` | `459 392` | Liczba wszystkich uczonych parametrów w modelu (niezależna od `context_size` dzięki czystemu RoPE!). |
+| `T` | `32 768 000` | Łączna liczba celów tokenowych w treningu (`8 000 × 16 × 256`). |
 
-W tym skrypcie każde okno ma tę samą długość, więc:
+### 2. Dokładny wzór na liczbę parametrów
 
-```text
-T = steps × batch_size × context_size
-  = 16 000 × 32 × 64
-  = 32 768 000
+Dla architektury z czystym **RoPE** (bez `position_embedding`) oraz wspólną macierzą wejścia/wyjścia (*weight tying*):
 
-T / U ≈ 141
-```
+- **Wariant `swiglu` + GQA (`n_kv_heads = n_heads / 2`, Wersja 0.3 i 0.4):**
+  $$P = V \times D + L \times (3 \times D^2 + 3 \times D \times F + 2 \times D) + D$$
+  Dla $V=512, D=128, F=384, L=2$:
+  $$P = 65\,536 + 2 \times (49\,152 + 147\,456 + 256) + 128 = 459\,392$$
 
-Ostatnia liczba opisuje skalę wielokrotnego wykorzystania danych. Nie oznacza
-141 pełnych epok: okna losujemy z powtórzeniami, nakładają się na siebie,
-a pozycje przy brzegach części treningowej pojawiają się rzadziej.
-**Powtarzanie książki nie tworzy nowych zdań ani nowych źródeł wiedzy.**
+- **Wariant `gelu` + MHA (Wersja 0.2):**
+  $$P = V \times D + L \times (4 \times D^2 + 2 \times D \times F + 2 \times D) + D$$
+  Dla $V=512, D=128, F=512, L=2$:
+  $$P = 65\,536 + 2 \times (65\,536 + 131\,072 + 256) + 128 = 459\,392$$
 
-Sprawdź także różnorodność tekstu, błędy OCR, powtarzane nagłówki i duplikaty.
-Dziesięć kopii tej samej książki nie daje takiej różnorodności jak dziesięć
-różnych książek. Badania pokazują malejącą korzyść z kolejnych powtórzeń danych;
-nie przenoś jednak ich konkretnej liczby epok na nasz przykład z nakładającymi
-się oknami. [Badanie o ograniczonej ilości danych](https://arxiv.org/abs/2305.16264).
+Zauważ, że:
+1. Zaoszczędzenie parametrów w `Wk` i `Wv` dzięki **GQA** dokładnie równoważy trzecią macierz `W_gate` w **SwiGLU** przy $F = 384$, dając identyczną liczbę parametrów (`459 392`).
+2. Dzięki czystemu **RoPE** rozmiar okna kontekstu (`C = 64` vs `C = 256`) w ogóle nie występuje we wzorze na $P$ — rozszerzenie pamięci modelu z 64 do 256 tokenów nie dodało ani jednego nowego parametru.
 
-Badania nad skalowaniem dużych LLM łączą ilość danych, rozmiar modelu i budżet
-obliczeń. Nie stanowią gotowej recepty dla jednej książki i kilkuset tysięcy
-parametrów: tutaj rozmiar wybieramy eksperymentalnie, na walidacji.
-[Badanie o doborze skali treningu](https://arxiv.org/abs/2203.15556).
+### 3. Rozpoznawanie przeuczenia i regularyzacja
 
-### 2. Zrozum, co zwiększa koszt i pojemność modelu
+Porównuj powtarzalne oceny ze stałych zbiorów (`train_loss_sample` i `validation_loss`). Skrypt automatycznie zachowuje w `tiny_gpt.json` checkpoint z najniższą stratą walidacyjną. Przy oznakach przeuczenia dostosowuj osobno `dropout` (obecnie `0,15`, w tym *attention dropout*) oraz `weight_decay` (`0,1` dla macierzy projekcji, `0,0` dla embeddingów i norm).
 
-Dla **tej implementacji**, bez biasów i ze wspólną macierzą wejścia/wyjścia,
-liczbę parametrów można policzyć dokładnie:
+---
 
-```text
-V = rozmiar słownika          C = context_size
-D = d_model                  F = d_ff
-L = n_layers
+## Pliki w repozytorium i testy automatyczne
 
-P = (V + C) × D + L × (4 × D² + 2 × D × F + 2 × D) + D
-```
+- [`model.py`](model.py) — architektura GPT: czyste RoPE, GQA, SwiGLU/GELU, RMSNorm, `forward` (SDPA), `forward_cached` (KV-Cache), `forward_with_attention`, zapis i odczyt.
+- [`train_bpe.py`](train_bpe.py) i [`train_config.json`](train_config.json) — trening modelu bazowego z automatycznym wyborem urządzenia (`mps`/`cuda`/`cpu`), walidacją i wyborem najlepszego checkpointu.
+- [`predict_gpt.py`](predict_gpt.py) — generowanie tekstu z KV-Cache, Top-p, Top-k, Repetition Penalty, podglądem wag attention i wyborem urządzenia (`cpu`/`mps`/`cuda`).
+- [`sft_chat.py`](sft_chat.py) — drugi etap uczenia (**Supervised Fine-Tuning**) z maskowaniem straty na pytaniu oraz tryb rozmowy Q&A (`tiny_gpt_chat.json`).
+- [`bpe_tokenizer.py`](bpe_tokenizer.py) i [`tokenizer_bpe.json`](tokenizer_bpe.json) — tokenizer BPE ze spacją jako prefiksem słowa, tablicą rang i fallbackiem UTF-8.
+- [`text_data.py`](text_data.py) — wspólny znacznik `<end>` i walidatory argumentów CLI.
+- [`test_bpe.py`](test_bpe.py) i [`test_model.py`](test_model.py) — zestaw 25 testów jednostkowych.
+- [`training_report.json`](training_report.json) i [`evaluation_report.json`](evaluation_report.json) — raport z ostatniego treningu (`context_size = 256`) oraz archiwalne porównanie wariantów bazowych.
+- [`changes/`](changes/README.md) — dokumentacja zmian w wersjach [`v0.1`](changes/v0.1.md), [`v0.2`](changes/v0.2.md), [`v0.3`](changes/v0.3.md) i [`v0.4`](changes/v0.4.md).
+- [`data/`](data/SOURCE.md) — pełny tekst „Pana Tadeusza” i opis źródła.
 
-Pierwszy składnik to embeddingi, nawias zawiera Q/K/V/Wo, feed-forward i dwie
-normy bloku, a ostatnie `D` to końcowa norma. Dla naszej konfiguracji wynik
-wynosi 467 584. To liczba wag, nie rozmiar pliku JSON ani całej pamięci treningu.
-Trening przechowuje również gradienty, stan AdamW i aktywacje.
-
-| Ustawienie | Jak je dobierać i co sprawdzać |
-|---|---|
-| Słownik BPE | Mniejszy słownik daje zwykle dłuższe sekwencje fragmentów. Większy zwiększa embeddingi i może zawierać wiele rzadkich fragmentów. Sprawdzaj długość sekwencji i częstości tokenów w treningu. U nas wybrano 512. |
-| `d_model`, `d_ff` | Określają szerokość obliczeń. Przy utrzymaniu `d_ff = 4 × d_model` podwojenie szerokości czterokrotnie powiększa macierze projekcji attention i feed-forward; embeddingi i normy rosną dwukrotnie. Sprawdź większą szerokość, gdy zarówno trening, jak i walidacja pozostają słabe mimo stabilnego uczenia. |
-| `n_layers` | Więcej kolejnych bloków pozwala na więcej przekształceń kontekstu, ale zwiększa koszt. U nas cztery bloki nie uzasadniły swojego kosztu względem dwóch. |
-| `n_heads` | Przy stałym `d_model` zmienia podział uwagi, a nie liczbę wag w tym modelu. Wymagane jest `d_model % n_heads == 0`; więcej głów daje krótszy wektor każdej głowy. |
-| `context_size` | Dobieraj do zależności, które model ma wykorzystywać. Podwojenie kontekstu czterokrotnie zwiększa liczbę elementów każdej macierzy attention; nie oznacza dokładnie czterokrotnie dłuższego całego treningu. U nas 128 tokenów nie poprawiło wyniku względem 64. |
-| `batch_size` | Liczba okien na aktualizację. Wpływa na pamięć, szum gradientów i ilość tekstu przetwarzanego w kroku. Większy batch nie gwarantuje lepszego modelu. |
-
-Jeśli masz więcej **nowego, przydatnego tekstu**, najpierw sprawdź na nim
-obecny rozmiar modelu. Przy stałej liczbie kroków każdy fragment będzie
-wykorzystany przeciętnie rzadziej; może być potrzebny dłuższy trening.
-Dopiero porównanie krzywych uzasadnia zwiększanie pojemności. Przy mniejszym
-korpusie sprawdź mniejszy model i wcześniejsze zakończenie, zamiast utrzymywać
-za wszelką cenę liczbę kroków wybraną dla większego zbioru.
-
-### 3. Zaprojektuj ocenę przed pierwszą próbą
-
-Ustal, co model ma umieć: kontynuować tę książkę, podobną literaturę czy
-współczesną polszczyznę. Dobierz odłożone teksty do tego celu. Dobry wynik
-na epilogu „Pana Tadeusza” nie mierzy umiejętności prowadzenia rozmowy.
-
-W większym eksperymencie wydziel trzy części: **trening** aktualizuje wagi,
-**walidacja** służy do wyboru ustawień i checkpointu, a **test** do końcowej
-oceny zamkniętej konfiguracji. Wielokrotne poprawianie modelu na podstawie
-testu zamienia go w kolejną walidację. Liczebność i reprezentatywność odłożonych
-danych są ważniejsze niż sztywny procent podziału.
-[Opis podziału i przecieku danych](https://developers.google.com/machine-learning/crash-course/overfitting/dividing-datasets).
-
-W tekście najpierw rozdziel dokumenty lub ciągłe fragmenty, **potem twórz
-okna**. Losowy podział gotowych, nakładających się okien przepuszcza prawie
-identyczne fragmenty do obu części. Przy wielu książkach grupuj podział
-według książek; jeśli oceniasz nowych autorów, rozdziel także autorów.
-Usuń duplikaty między częściami. Tysiące nakładających się okien jednej księgi
-nie są tysiącami niezależnych tekstów.
-
-Skrypt obsługuje dwie części: trening i walidację. Udział wybiera
-`validation_fraction`; obecna konfiguracja daje podział 90% / 10%.
-Osobny test oraz podział według dokumentów wymagałyby rozszerzenia przygotowania
-danych. Przy rygorystycznym eksperymencie ucz również reguły BPE na treningu
-i z góry określ obsługiwany alfabet. Obecny tokenizer zna całą książkę;
-nieznany znak powoduje błąd. Nie ma automatycznej obsługi dowolnego alfabetu.
-
-### 4. Rozpoznawaj przeuczenie po przebiegu, nie po jednej liczbie
-
-**Overfitting, czyli przeuczenie**, oznacza coraz lepsze dopasowanie do danych
-treningowych bez odpowiadającej mu poprawy na nowych danych. Typowym sygnałem
-jest spadek straty treningowej przy utrzymującym się wzroście walidacyjnej.
-
-| Obserwacja w kolejnych ocenach | Co sprawdzić lub zrobić |
-|---|---|
-| Obie straty maleją | Model nadal poprawia przewidywania na walidacji. Oceń, czy zysk uzasadnia dalszy czas. |
-| Trening maleje, walidacja przez kilka ocen rośnie | Podejrzenie przeuczenia. Zachowaj wcześniejszy checkpoint; sprawdź mniejszy model, regularyzację lub nowe dane. |
-| Obie straty są wysokie i stoją | Możliwe niedouczenie, nieodpowiedni learning rate, zbyt silna regularyzacja albo błąd danych/kodu. Sam wykres nie wskazuje jednej przyczyny. |
-| Strata gwałtownie skacze lub pojawia się NaN | Sprawdź stabilność obliczeń, dane i learning rate. To nie jest typowy objaw samego przeuczenia. |
-
-Porównuj powtarzalne oceny ze stałych zbiorów. Jeden losowy batch nie wystarcza
-do diagnozy. Takie rozróżnienie pomaga odróżnić problemy optymalizacji od
-przeuczenia. [Przewodnik po krzywych straty](https://developers.google.com/machine-learning/crash-course/overfitting/interpreting-loss-curves).
-
-W naszym zapisanym treningu wygląda to następująco. Obie oceny działają bez
-dropout i bez aktualizacji wag, także `train_loss_sample`.
-
-| Krok | `train_loss_sample` | `validation_loss` |
-|---:|---:|---:|
-| 1 000 | 3,271 | 3,393 |
-| 8 000 | 2,442 | 2,927 |
-| 16 000 | 2,247 | 2,887 |
-
-Różnica rośnie, ale walidacja nadal się poprawia. **Sam odstęp między krzywymi
-nie wystarcza, żeby nakazać zatrzymanie treningu.** Części książki mogą też
-różnić się trudnością. Nie ma uniwersalnego progu typu „różnica 0,5 = overfitting”.
-Powyższe wyniki są z `history` w raporcie; nie mieszaj ich z końcowym
-`full_training_loss`, który ocenia wszystkie okna zamiast próbki.
-
-W odrzuconym wariancie z kontekstem 128 walidacja pogorszyła się z około 2,9348
-przy 11 000 kroków do 2,9356 przy 12 000. To wystarczyło do zachowania wcześniejszych
-wag, ale pojedyncze tak małe pogorszenie nie dowodzi trwałego przeuczenia.
-
-### 5. Ustal zasadę zatrzymania i regularyzację
-
-**Wybór najlepszego checkpointu** i **early stopping** to dwie różne czynności.
-Pierwszą skrypt wykonuje: zapisuje każde ścisłe minimum walidacji. Drugiej
-nie implementuje: wykonuje wszystkie zadane `steps`, nawet gdy wynik już
-się nie poprawia.
-
-Przykładowa reguła planowania przyszłego eksperymentu: po fazie warmup zakończ
-trening, jeśli przez 3 kolejne oceny nie uda się poprawić dotychczasowego
-istotnego minimum o co najmniej 0,005. To odpowiednio *patience* i *min_delta*.
-Przy ocenie co 1000 kroków cierpliwość wynosi 3000 kroków. Dobierz te liczby
-do wahań wyniku i kosztu treningu; to przykład, nie ustalony próg dla każdej książki.
-Checkpoint można nadal zapisywać przy każdym, nawet mniejszym spadku straty.
-
-Tej reguły **nie można obecnie włączyć polem w JSON**. Nieznane pola zostaną
-odrzucone. Najpierw analizuj logi i raport, a automatyczne zatrzymanie wymagałoby
-zmiany pętli treningowej. Przerwanie procesu pozostawia zapisany checkpoint,
-ale końcowy raport powstaje dopiero po zakończeniu skryptu; raport z wcześniejszego
-uruchomienia nie opisuje nowych wag. Porównuj jego hash z plikiem modelu.
-
-Przy oznakach przeuczenia sprawdzaj osobno `dropout` i `weight_decay`.
-Dropout utrudnia poleganie na tych samych aktywacjach, a weight decay ogranicza
-wzrost wag. Zbyt duże wartości mogą utrudnić samo uczenie. Nie zwiększaj obu
-jednocześnie, jeśli chcesz wiedzieć, która zmiana pomogła. U nas punktem
-odniesienia są 0,15 i 0,1; nie ma gwarancji, że będą najlepsze dla nowych danych.
-W AdamW weight decay jest oddzielone od gradientu straty. Gradient clipping
-ogranicza normę gradientów, ale sam nie rozwiązuje przeuczenia.
-
-### 6. Prowadź małe, porównywalne eksperymenty
-
-1. **Zachowaj punkt odniesienia.** Skopiuj konfigurację, model i raport przed
-   zmianami. Nadaj kolejnemu uruchomieniu osobne ścieżki `model` i `report`.
-   Zanotuj hipotezę, np. „mniejszy learning rate poprawi stabilność”.
-2. **Sprawdź poprawność kodu na krótkim fragmencie.** Powinien umieć mocno obniżyć
-   jego stratę. To test działania uczenia, nie dowód jakości języka; repo ma
-   taki test automatyczny. Nie zaczynaj długiej serii, gdy ten test zawodzi.
-3. **Najpierw dobierz learning rate.** Przy tej samej architekturze porównaj
-   obecną wartość z mniejszą i większą, np. o czynnik 2. Zachowaj sposób
-   wyznaczania warmup i proporcję `min_learning_rate` do maksimum. Wybieraj
-   na podstawie stabilności i walidacji, nie najszybszego spadku jednego batcha.
-4. **Następnie zmieniaj pojemność lub regularyzację.** Jedna hipoteza na próbę:
-   szerokość, liczba bloków, kontekst albo dropout. Zmienianie wszystkiego
-   jednocześnie nie pozwala przypisać poprawy konkretnej przyczynie.
-5. **Ustal budżet porównania.** Przy tym samym tokenizerze zapisuj `T`, czas
-   i liczbę parametrów. Równa liczba kroków przy innym batchu lub kontekście
-   nie oznacza równej ilości przetworzonego tekstu. Równe `T` przy różnych
-   modelach też nie oznacza równego kosztu obliczeń.
-6. **Sprawdź najlepsze ustawienia z kilkoma seedami treningu**, np. 1, 2 i 3.
-   Podaj średnią i rozrzut wyników zamiast wybierać szczęśliwy seed.
-   Seed w `predict_gpt.py` zmienia tylko losowanie tekstu; nie zastępuje tego testu.
-7. **Porównaj teksty na stałych promptach.** Zachowaj te same temperatury,
-   top-k, limity i seedy generowania. Oceniaj błędy słów, składnię, powtórzenia,
-   sens i kopiowanie fragmentów książki. Zapisuj wszystkie próbki, także słabe.
-8. **Wybierz model według wcześniej ustalonego celu.** Przy podobnym wyniku
-   mniejszy lub szybszy model może być lepszym wyborem. Istotność małej różnicy
-   oceń przez rozrzut między treningami, nie samą liczbę miejsc po przecinku.
-
-Zmienianie `steps` zmienia w tym kodzie również cały harmonogram kosinusowy.
-Trening zaplanowany na 8000 kroków nie jest pierwszą połową treningu zaplanowanego
-na 16 000: learning rate wcześniej zacznie zbliżać się do minimum. Skrypt nie
-wznawia optymalizatora z checkpointu. Zanotuj tę różnicę przy porównaniach.
-
-### 7. Uważaj na porównywanie różnych metryk
-
-Cross-entropy liczymy tu z logarytmem naturalnym, a `perplexity = exp(loss)`.
-Mniejsza perplexity oznacza lepsze przewidywanie według tego samego pomiaru;
-nie jest procentem poprawnych zdań. Zmiana temperatury generowania nie
-poprawia straty walidacyjnej zapisanych wag.
-
-Przy zmianie kontekstu używaj tych samych docelowych tokenów, tak jak w tabeli
-zmierzonych wyników. Przy zmianie tokenizera samo „loss na token” przestaje
-być bezpośrednio porównywalne: tokeny mają inną długość. Potrzebujesz oceny
-tego samego surowego tekstu, np. sumy ujemnych log-prawdopodobieństw podzielonej
-przez liczbę ocenianych bajtów UTF-8 i przez `ln(2)` — to bity na bajt.
-Zachowaj te same granice tekstu, zasady kontekstu i liczenie każdego celu raz.
-Obecny skrypt nie oblicza tej metryki; nasze porównanie zachowuje jeden tokenizer.
-
-Zmiana słownika BPE wymaga nowego treningu tokenizera i modelu. Przypisanie
-innego słownika do gotowych embeddingów nie jest poprawną kontynuacją uczenia.
-Jeśli wszystkie małe warianty przestają poprawiać walidację, sprawdź jakość,
-różnorodność i zgodność danych z zadaniem, zamiast bez końca zwiększać kroki.
-Nowe teksty mogą pomóc, lecz sama liczba plików nie gwarantuje poprawy.
-
-
-## Pliki i sprawdzenie obliczeń
-
-- `model.py` — Q/K/V, głowy, bloki, normy, feed-forward, zapis i odczyt.
-- `train_bpe.py` i `train_config.json` — jeden przebieg treningu z walidacją.
-- `predict_gpt.py` — osobny program do przewidywania tokenów.
-- `bpe_tokenizer.py` i `tokenizer_bpe.json` — tokenizer i jego słownik.
-- `training_report.json` i `evaluation_report.json` — wyniki zmierzonego treningu i porównania.
-- `data/` — tekst treningowy, oryginalny plik źródłowy i opis pochodzenia.
+Uruchomienie wszystkich 25 testów jednostkowych:
 
 ```sh
 .venv/bin/python -m unittest -v
 ```
-
-Testy porównują attention z rachunkiem liczbowym oraz wyjście i **gradienty
-wszystkich wag** z niezależną implementacją opartą na funkcjach PyTorch.
-Sprawdzają maskę przyczynową, wiele głów i bloków, BPE, podział danych,
-wybór wcześniejszego checkpointu, wyłączanie dropout, wymagane ustawienia,
-zapis i odczyt oraz rzeczywisty trening małego testowego tekstu i predykcję
-po usunięciu tego tekstu i osobnego tokenizera.

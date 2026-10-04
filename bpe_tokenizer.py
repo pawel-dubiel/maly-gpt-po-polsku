@@ -10,7 +10,7 @@ from text_data import END, positive_integer
 
 
 TOKENIZER_TYPE = "unicode-bpe-v1"
-SEGMENTS = re.compile(r"\s+|\w+|[^\w\s]+", re.UNICODE)
+SEGMENTS = re.compile(r" ?\w+| ?[^\w\s]+|\s+", re.UNICODE)
 
 
 def merge_pair(ids, left, right, result):
@@ -32,6 +32,7 @@ class BPETokenizer:
         self.vocabulary = tuple(vocabulary)
         self.merges = tuple(tuple(merge) for merge in merges)
         self.ids = {piece: i for i, piece in enumerate(self.vocabulary)}
+        self.ranks = {(left, right): (rank, result) for rank, (left, right, result) in enumerate(self.merges)}
 
     @classmethod
     def train(cls, text, vocabulary_size):
@@ -71,7 +72,21 @@ class BPETokenizer:
         return cls.from_dict({"type": TOKENIZER_TYPE, "alphabet": alphabet,
                               "vocabulary": vocabulary, "merges": merges})
 
-    def encode(self, text):
+    def _fallback_ids(self, char):
+        # Byte-level fallback (<0xXX>) if present in vocabulary, otherwise Unicode/ASCII normalization.
+        raw = char.encode("utf-8")
+        if all(f"<0x{b:02X}>" in self.ids for b in raw):
+            return [self.ids[f"<0x{b:02X}>"] for b in raw]
+        replacements = {'"': "«", "'": ",", "–": "—", "—": "-", "\t": " "}
+        if char in replacements and replacements[char] in self.ids:
+            return [self.ids[replacements[char]]]
+        if char.lower() in self.ids:
+            return [self.ids[char.lower()]]
+        if " " in self.ids:
+            return [self.ids[" "]]
+        return [1]
+
+    def encode(self, text, strict=True):
         if not isinstance(text, str) or not text:
             raise ValueError("Text or prompt must contain at least one character.")
         if END in text:
@@ -79,23 +94,40 @@ class BPETokenizer:
         output, cache = [], {}
         for segment in SEGMENTS.findall(text):
             if segment not in cache:
+                ids = []
                 for char in segment:
-                    if char not in self.alphabet:
+                    if char in self.ids:
+                        ids.append(self.ids[char])
+                    elif not strict:
+                        ids.extend(self._fallback_ids(char))
+                    else:
                         raise ValueError(f"Unknown character: {char!r}. The tokenizer was not trained on it.")
-                ids = [self.ids[char] for char in segment]
                 # Apply learned rules in their original order, including overlapping-pair handling.
-                for left, right, result in self.merges:
-                    ids = merge_pair(ids, left, right, result)
+                while len(ids) >= 2:
+                    best = min(zip(ids, ids[1:]), key=lambda pair: self.ranks.get(pair, (len(self.merges), -1)))
+                    if best not in self.ranks:
+                        break
+                    ids = merge_pair(ids, best[0], best[1], self.ranks[best][1])
                 cache[segment] = ids
             output.extend(cache[segment])
         return output
 
     def decode(self, ids):
         pieces = []
+        byte_buffer = bytearray()
         for token in ids:
             if type(token) is not int or not 0 <= token < len(self.vocabulary):
                 raise ValueError("Invalid token ID in BPE decoding.")
-            pieces.append(self.vocabulary[token])
+            piece = self.vocabulary[token]
+            if len(piece) == 6 and piece.startswith("<0x") and piece.endswith(">"):
+                byte_buffer.append(int(piece[3:5], 16))
+            else:
+                if byte_buffer:
+                    pieces.append(byte_buffer.decode("utf-8", errors="replace"))
+                    byte_buffer.clear()
+                pieces.append(piece)
+        if byte_buffer:
+            pieces.append(byte_buffer.decode("utf-8", errors="replace"))
         return "".join(pieces)
 
     def to_dict(self):

@@ -4,20 +4,20 @@
   "model": "tiny_gpt.json",
   "report": "training_report.json",
   "architecture": {
-    "context_size": 64,
+    "context_size": 256,
     "d_model": 128,
-    "d_ff": 512,
+    "d_ff": 384,
     "n_heads": 4,
     "n_layers": 2,
     "dropout": 0.15,
     "rms_epsilon": 1e-05,
-    "activation": "gelu",
+    "activation": "swiglu",
     "tie_embeddings": true
   },
   "training": {
     "seed": 1,
-    "steps": 16000,
-    "batch_size": 32,
+    "steps": 8000,
+    "batch_size": 16,
     "learning_rate": 0.001,
     "min_learning_rate": 0.0001,
     "warmup_steps": 200,
@@ -26,9 +26,9 @@
     "beta2": 0.99,
     "adam_epsilon": 1e-08,
     "gradient_clip": 1.0,
-    "evaluate_every": 1000,
+    "evaluate_every": 500,
     "train_eval_windows": 1024,
     "validation_fraction": 0.1,
-    "threads": 1
+    "threads": 8
   }
 }

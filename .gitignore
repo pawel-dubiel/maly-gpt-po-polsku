@@ -1,5 +1,5 @@
 __pycache__/
 *.pyc
 .venv/
-tiny_gpt_bpe64.json
 tiny_gpt.json
+tiny_gpt_chat.json

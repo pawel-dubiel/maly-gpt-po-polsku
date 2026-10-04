@@ -15,8 +15,8 @@ from bpe_tokenizer import BPETokenizer
 def make_windows(ids, context_size):
     if type(context_size) is not int or context_size < 1:
         raise ValueError("Rozmiar kontekstu musi być dodatnią liczbą całkowitą.")
-    if any(type(token) is not int or token < 1 for token in ids):
-        raise ValueError("Strumień treningowy musi zawierać ID tokenów bez znacznika <end>.")
+    if any(type(token) is not int or token < 0 for token in ids) or any(token == 0 for token in ids[:-1]):
+        raise ValueError("Strumień treningowy musi zawierać ID tokenów bez znacznika <end> wewnątrz tekstu.")
     if len(ids) <= context_size:
         raise ValueError(f"Tekst wymaga co najmniej {context_size + 1} tokenów BPE.")
     stream = torch.tensor(ids, dtype=torch.long, device="cpu")
@@ -53,10 +53,12 @@ def mean_loss(model, inputs, targets, batch_size):
         raise ValueError("Batch size musi być dodatnią liczbą całkowitą.")
     was_training = model.training
     model.eval()
+    device = model.weights["token_embedding"].device
     try:
         total = 0.0
         for start in range(0, len(inputs), batch_size):
-            x, y = inputs[start:start + batch_size], targets[start:start + batch_size]
+            x = inputs[start:start + batch_size].to(device)
+            y = targets[start:start + batch_size].to(device)
             loss = batch_loss(model, x, y)
             if not torch.isfinite(loss).item():
                 raise ValueError("Loss jest nieskończony lub NaN; zmniejsz learning rate.")
@@ -123,10 +125,22 @@ def learning_rate(step, settings):
         1 + math.cos(math.pi * progress)) / 2
 
 
+def select_training_device(context_size):
+    if context_size >= 128:
+        if torch.cuda.is_available():
+            return torch.device("cuda")
+        if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            return torch.device("mps")
+    return torch.device("cpu")
+
+
 def train(model, inputs, targets, validation_inputs, validation_targets, settings, model_path):
-    # Normy są zapisane jako [1, D], dlatego grupujemy po nazwie, nie po ndim.
-    decay = [p for name, p in model.weights.items() if "norm_" not in name]
-    no_decay = [p for name, p in model.weights.items() if "norm_" in name]
+    device = select_training_device(model.context_size)
+    model.to(device)
+    # Normy i embeddingi nie podlegają weight decay; grupujemy po nazwie, nie po ndim.
+    no_decay_names = ("norm_", "embedding")
+    decay = [p for name, p in model.weights.items() if not any(k in name for k in no_decay_names)]
+    no_decay = [p for name, p in model.weights.items() if any(k in name for k in no_decay_names)]
     optimizer = torch.optim.AdamW([
         {"params": decay, "weight_decay": settings["weight_decay"]},
         {"params": no_decay, "weight_decay": 0.0},
@@ -137,12 +151,16 @@ def train(model, inputs, targets, validation_inputs, validation_targets, setting
     count = min(len(inputs), settings["train_eval_windows"])
     chosen = torch.linspace(0, len(inputs) - 1, steps=count).long()
     eval_x, eval_y = inputs[chosen], targets[chosen]
+    stride = max(1, model.context_size // 2)
+    val_x, val_y = validation_inputs[::stride], validation_targets[::stride]
+    full_train_x, full_train_y = inputs[::stride], targets[::stride]
     batch = settings["batch_size"]
+    eval_batch = max(batch, 128 if model.context_size >= 128 else 256)
     history = []
     started = time.perf_counter()
-    initial = {"train_loss_sample": mean_loss(model, eval_x, eval_y, batch),
-               "validation_loss": mean_loss(model, validation_inputs, validation_targets, batch)}
-    print(f"Initial: {json.dumps(initial)}", flush=True)
+    initial = {"train_loss_sample": mean_loss(model, eval_x, eval_y, eval_batch),
+               "validation_loss": mean_loss(model, val_x, val_y, eval_batch)}
+    print(f"Initial ({device.type}): {json.dumps(initial)}", flush=True)
     best_loss, best_step = math.inf, None
     for step in range(1, settings["steps"] + 1):
         model.train()
@@ -151,7 +169,7 @@ def train(model, inputs, targets, validation_inputs, validation_targets, setting
             group["lr"] = rate
         indices = torch.randint(len(inputs), (batch,), generator=rng)
         optimizer.zero_grad(set_to_none=True)
-        loss = batch_loss(model, inputs[indices], targets[indices])
+        loss = batch_loss(model, inputs[indices].to(device), targets[indices].to(device))
         if not torch.isfinite(loss).item():
             raise ValueError("Loss jest nieskończony lub NaN; zmniejsz learning rate.")
         loss.backward()
@@ -159,8 +177,8 @@ def train(model, inputs, targets, validation_inputs, validation_targets, setting
         optimizer.step()
         if step == 1 or step % settings["evaluate_every"] == 0 or step == settings["steps"]:
             record = {"step": step, "learning_rate": rate,
-                      "train_loss_sample": mean_loss(model, eval_x, eval_y, batch),
-                      "validation_loss": mean_loss(model, validation_inputs, validation_targets, batch)}
+                      "train_loss_sample": mean_loss(model, eval_x, eval_y, eval_batch),
+                      "validation_loss": mean_loss(model, val_x, val_y, eval_batch)}
             if record["validation_loss"] < best_loss:
                 save_model(model_path, model)
                 best_loss, best_step = record["validation_loss"], step
@@ -171,9 +189,10 @@ def train(model, inputs, targets, validation_inputs, validation_targets, setting
             history.append(record)
             print(json.dumps(record), flush=True)
     # Końcowa ocena dotyczy faktycznie zapisanego modelu, a nie ostatnich wag w pamięci.
-    best = load_model(model_path)
-    full_train = mean_loss(best, inputs, targets, batch)
-    full_validation = mean_loss(best, validation_inputs, validation_targets, batch)
+    best = load_model(model_path).to(device)
+    full_train = mean_loss(best, full_train_x, full_train_y, eval_batch)
+    full_validation = mean_loss(best, val_x, val_y, eval_batch)
+    model.to("cpu")
     print(f"Best checkpoint: step {best_step}; training loss = {full_train:.6f}; "
           f"validation loss = {full_validation:.6f}; {model_path}", flush=True)
     return {"initial": initial, "history": history, "best_step": best_step,
@@ -195,7 +214,7 @@ def main():
         torch.set_num_threads(settings["threads"])
         tokenizer = BPETokenizer.load(paths["tokenizer"])
         text = paths["data"].read_text(encoding="utf-8")
-        ids = tokenizer.encode(text)
+        ids = tokenizer.encode(text) + [0]
         windows = split_windows(ids, config["architecture"]["context_size"], settings["validation_fraction"])
         model = new_model(tokenizer, config["architecture"], settings["seed"])
         parameters = sum(p.numel() for p in model.parameters())

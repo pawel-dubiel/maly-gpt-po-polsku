@@ -21,8 +21,8 @@ do LF. Zachowano nagłówki ksiąg, streszczenia, pisownię, wielkość liter i
 interpunkcję. Zweryfikowano kolejność wszystkich dwunastu ksiąg i epilogu.
 
 Tekst treningowy zawiera 445 638 znaków i 68 896 wystąpień słów rozdzielonych
-białymi znakami. Wyuczony tokenizer BPE daje 258 648 tokenów strumienia i słownik
-512 wpisów, w tym zarezerwowany `<end>`.
+białymi znakami. Wyuczony tokenizer BPE (łączący spacje jako prefiks słów) daje
+218 227 tokenów tekstu (218 228 ze znacznikiem końca `<end>`) i słownik 512 wpisów.
 
 SHA-256 tekstu treningowego:
 

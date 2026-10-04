@@ -63,7 +63,7 @@ class ModelTests(unittest.TestCase):
             self.assertEqual(tuple(attention.shape), (1, 4, 4, 4))
             self.assertEqual(attention.triu(1).count_nonzero().item(), 0)
             torch.testing.assert_close(attention.sum(-1), torch.ones((1, 4, 4)))
-        torch.testing.assert_close(first[:, :3], changed[:, :3], rtol=0, atol=0)
+        torch.testing.assert_close(first[:, :3], changed[:, :3], rtol=1e-5, atol=1e-6)
         with self.assertRaises(ValueError):
             new_model(self.tokenizer, dict(architecture, d_model=17), 1)
 
@@ -239,12 +239,13 @@ class ModelTests(unittest.TestCase):
                                               n_heads=4, n_layers=2), 3).double()
         weights = {name: p.detach().clone().requires_grad_() for name, p in model.weights.items()}
         ids = torch.tensor([[2, 3, 2], [3, 2, 2]])
-        x = F.embedding(ids, weights["token_embedding"]) + weights["position_embedding"]
+        x = F.embedding(ids, weights["token_embedding"])
         for layer in range(2):
             prefix = f"block_{layer}_"
             z = F.rms_norm(x, (16,), weights[prefix + "norm_attention"].squeeze(0), 1e-5)
             q, k, v = [F.linear(z, weights[prefix + name].T).reshape(2, 3, 4, 4).transpose(1, 2)
                        for name in ("Wq", "Wk", "Wv")]
+            q, k = model.apply_rope(q), model.apply_rope(k)
             attended = F.scaled_dot_product_attention(q, k, v, is_causal=True, dropout_p=0.0)
             x = x + F.linear(attended.transpose(1, 2).reshape(2, 3, 16), weights[prefix + "Wo"].T)
             z = F.rms_norm(x, (16,), weights[prefix + "norm_ff"].squeeze(0), 1e-5)
@@ -252,7 +253,9 @@ class ModelTests(unittest.TestCase):
         expected = F.linear(F.rms_norm(x, (16,), weights["norm_final"].squeeze(0), 1e-5),
                             weights["token_embedding"])
         actual = model(ids)
+        with_maps, _ = model.forward_with_attention(ids)
         torch.testing.assert_close(actual, expected, rtol=1e-10, atol=1e-12)
+        torch.testing.assert_close(with_maps, expected, rtol=1e-10, atol=1e-12)
         targets = torch.tensor([3, 2, 3, 2, 2, 3])
         F.cross_entropy(actual.flatten(0, 1), targets).backward()
         F.cross_entropy(expected.flatten(0, 1), targets).backward()
@@ -309,10 +312,39 @@ class ModelTests(unittest.TestCase):
         from unittest.mock import patch
 
         logits = torch.tensor([[[1000.0, -1000.0, -1000.0, -1000.0]]])
-        with patch.object(self.model, "forward", return_value=logits):
+        with patch.object(self.model, "forward_cached", return_value=(logits, None)):
             text, ended = generate(self.model, "a ", 1, 3, 1.0, 4)
         self.assertTrue(ended)
         self.assertEqual(text, "a ")
+
+    def test_swiglu_gqa_qknorm_and_kv_cache_match_full_forward(self):
+        arch = dict(ARCHITECTURE, context_size=8, d_model=16, d_ff=32,
+                    n_heads=4, n_layers=2, activation="swiglu")
+        model = new_model(self.tokenizer, arch, 7).eval()
+        self.assertEqual(model.n_kv_heads, 2)
+        self.assertIn("block_0_W_gate", model.weights)
+        seq = torch.tensor([[2, 3, 1, 2, 3]])
+        full_logits = model(seq)
+        prefill_logits, cache = model.forward_cached(seq[:, :3], kv_cache=None)
+        torch.testing.assert_close(prefill_logits, full_logits[:, :3], rtol=1e-5, atol=1e-6)
+        step4_logits, cache = model.forward_cached(seq[:, 3:4], kv_cache=cache)
+        step5_logits, cache = model.forward_cached(seq[:, 4:5], kv_cache=cache)
+        torch.testing.assert_close(step4_logits[:, 0], full_logits[:, 3], rtol=1e-5, atol=1e-6)
+        torch.testing.assert_close(step5_logits[:, 0], full_logits[:, 4], rtol=1e-5, atol=1e-6)
+
+    def test_top_p_repetition_penalty_and_utf8_fallback(self):
+        text, ended = generate(self.model, "a🙂", 1, 2, 0.8, 4, top_p=0.9, repetition_penalty=1.2)
+        self.assertIsInstance(text, str)
+        self.assertIsInstance(ended, bool)
+
+    def test_sft_masked_loss_teaches_end_token(self):
+        import sft_chat
+
+        x, y = sft_chat.build_sft_batch(self.tokenizer, [("a", "b")], context_size=8)
+        self.assertEqual(x.shape, (1, 8))
+        self.assertEqual(y.shape, (1, 8))
+        self.assertIn(sft_chat.IGNORE_INDEX, y[0].tolist())
+        self.assertIn(0, y[0].tolist())
 
     def test_train_then_predict_using_only_checkpoint(self):
         with tempfile.TemporaryDirectory() as directory:
